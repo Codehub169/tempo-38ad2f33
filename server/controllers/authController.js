@@ -2,36 +2,44 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getAppDb } from "../db/setup.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || 'yourFallbackSecretKey';
-const JWT_EXPIRES_IN = '30d';
+const JWT_SECRET = process.env.JWT_SECRET || 'yourFallbackSecretKeyForDevelopmentOnly'; // Ensure this is in .env for production
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
 
-const generateToken = (id, email) => {
-  if (!id || !email) {
-    // This should ideally not happen if called correctly
-    console.error('generateToken called with missing id or email.');
-    throw new Error('Cannot generate token without user id and email.');
+const generateToken = (id, email, role) => {
+  if (!id || !email || !role) {
+    console.error('generateToken called with missing id, email, or role.');
+    // In a real app, this might throw an error or handle it more gracefully.
+    // For now, logging and proceeding might lead to a token without full info if not caught earlier.
+    throw new Error('Cannot generate token without user id, email, and role.');
   }
-  return jwt.sign({ id, email }, JWT_SECRET, {
+  return jwt.sign({ id, email, role }, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
   });
 };
 
 export const registerUser = async (req, res) => {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: 'Please provide name, email, and password' });
+  const { name, email, password, role } = req.body;
+
+  if (!name || !email || !password || !role) {
+    return res.status(400).json({ message: 'Please provide name, email, password, and role' });
   }
-  // Basic email validation regex
-  if (!/^\S+@\S+\.\S+$/.test(email)) {
+  if (typeof name !== 'string' || name.trim().length === 0) {
+    return res.status(400).json({ message: 'Name must be a non-empty string' });
+  }
+  if (typeof email !== 'string' || !/^\S+@\S+\.\S+$/.test(email)) {
     return res.status(400).json({ message: 'Please provide a valid email address' });
   }
-  if (password.length < 6) {
+  if (typeof password !== 'string' || password.length < 6) {
     return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+  }
+  if (!['buyer', 'seller'].includes(role)) {
+    return res.status(400).json({ message: "Role must be either 'buyer' or 'seller'" });
   }
 
   try {
     const db = await getAppDb();
-    const userExists = await db.get('SELECT id FROM users WHERE email = ?', email.toLowerCase());
+    const lowercasedEmail = email.toLowerCase();
+    const userExists = await db.get('SELECT id FROM users WHERE email = ?', lowercasedEmail);
     if (userExists) {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
@@ -40,22 +48,22 @@ export const registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const result = await db.run(
-      'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
-      name, email.toLowerCase(), hashedPassword
+      'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)',
+      name.trim(), lowercasedEmail, hashedPassword, role
     );
 
     if (result.lastID) {
-      const token = generateToken(result.lastID, email.toLowerCase());
+      const token = generateToken(result.lastID, lowercasedEmail, role);
       res.status(201).json({
         id: result.lastID,
-        name,
-        email: email.toLowerCase(),
+        name: name.trim(),
+        email: lowercasedEmail,
+        role: role,
         token,
       });
     } else {
-      // This case should be rare if DB is operational and schema is correct
-      console.error('User registration inserted 0 rows, result:', result);
-      res.status(500).json({ message: 'Error registering user' });
+      console.error('User registration failed to insert, result:', result);
+      res.status(500).json({ message: 'Error registering user due to a database issue' });
     }
   } catch (error) {
     console.error('Register user error:', error);
@@ -68,20 +76,22 @@ export const loginUser = async (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ message: 'Please provide email and password' });
   }
-  if (!/^\S+@\S+\.\S+$/.test(email)) {
+  if (typeof email !== 'string' || !/^\S+@\S+\.\S+$/.test(email)) {
     return res.status(400).json({ message: 'Please provide a valid email address' });
   }
 
   try {
     const db = await getAppDb();
-    const user = await db.get('SELECT id, name, email, password_hash FROM users WHERE email = ?', email.toLowerCase());
+    const lowercasedEmail = email.toLowerCase();
+    const user = await db.get('SELECT id, name, email, password_hash, role FROM users WHERE email = ?', lowercasedEmail);
 
     if (user && (await bcrypt.compare(password, user.password_hash))) {
-      const token = generateToken(user.id, user.email);
+      const token = generateToken(user.id, user.email, user.role);
       res.json({
         id: user.id,
         name: user.name,
         email: user.email, // Already lowercased from DB
+        role: user.role,
         token,
       });
     } else {
@@ -94,25 +104,26 @@ export const loginUser = async (req, res) => {
 };
 
 export const getLoggedInUserProfile = async (req, res) => {
-  // req.user is populated by the 'protect' middleware and should contain id and email
+  // req.user is populated by the 'protect' middleware
   if (!req.user || !req.user.id) {
-    // This case should be prevented by the 'protect' middleware
-    return res.status(401).json({ message: 'Not authorized, user information missing' });
+    // This should be caught by 'protect' middleware, but as a safeguard:
+    return res.status(401).json({ message: 'Not authorized, user information missing in request' });
   }
 
   try {
       const db = await getAppDb();
-      // Fetch user profile using the ID from the token
-      const userProfile = await db.get('SELECT id, name, email, created_at FROM users WHERE id = ?', req.user.id);
+      // Fetch user profile using the ID from the token (req.user.id)
+      // req.user already contains id, email, role from the token, but fetching from DB ensures data is current.
+      const userProfile = await db.get('SELECT id, name, email, role, created_at FROM users WHERE id = ?', req.user.id);
+      
       if (userProfile) {
-          // Ensure email from DB is consistent (it should be, as it's from token's user.id)
           res.json(userProfile);
       } else {
-          // This implies user ID in token is valid but user doesn't exist in DB (e.g., deleted after token issuance)
-          res.status(404).json({ message: 'User profile not found' });
+          // User ID in token was valid, but user no longer exists in DB.
+          res.status(404).json({ message: 'User profile not found. The user may have been deleted.' });
       }
   } catch (error) {
       console.error('Get user profile error:', error);
-      res.status(500).json({ message: 'Server error fetching profile', error: error.message });
+      res.status(500).json({ message: 'Server error fetching user profile', error: error.message });
   }
 };

@@ -64,6 +64,18 @@ async function initializeDatabaseSchema() {
     console.log('Categories table created or already exists (db:init).');
 
     await db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          name TEXT,
+          role TEXT NOT NULL DEFAULT 'buyer' CHECK(role IN ('buyer', 'seller')),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('Users table created or already exists (db:init).');
+
+    await db.exec(`
       CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -72,6 +84,7 @@ async function initializeDatabaseSchema() {
         condition TEXT CHECK(condition IN ('Excellent', 'Good', 'Fair')) NOT NULL,
         stock_quantity INTEGER NOT NULL DEFAULT 0,
         category_id INTEGER,
+        user_id INTEGER, -- Added for seller association
         image_url TEXT,
         images TEXT, -- JSON array of image URLs for gallery
         warranty_info TEXT,
@@ -81,7 +94,8 @@ async function initializeDatabaseSchema() {
         specifications TEXT, -- JSON object for detailed specs
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL -- Added FK
       );
     `);
     console.log('Products table created or already exists (db:init).');
@@ -94,9 +108,9 @@ async function initializeDatabaseSchema() {
         shipping_address TEXT NOT NULL, -- JSON object for address
         total_amount REAL NOT NULL,
         status TEXT DEFAULT 'Pending' CHECK(status IN ('Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled')),
-        order_date DATETIME DEFAULT CURRENT_TIMESTAMP
-        -- user_id INTEGER, -- Optional: Link orders to registered users
-        -- FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        user_id INTEGER, -- Optional: Link orders to registered users
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
       );
     `);
     console.log('Orders table created or already exists (db:init).');
@@ -114,17 +128,6 @@ async function initializeDatabaseSchema() {
     `);
     console.log('Order_items table created or already exists (db:init).');
     
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          email TEXT UNIQUE NOT NULL,
-          password_hash TEXT NOT NULL,
-          name TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    console.log('Users table created or already exists (db:init).');
-
     const categoriesData = [
       { name: 'Mobiles' }, { name: 'TVs' }, { name: 'Laptops' }, 
       { name: 'Fridges' }, { name: 'ACs' }, { name: 'Appliances' }
@@ -136,6 +139,8 @@ async function initializeDatabaseSchema() {
     await insertCategory.finalize();
     console.log('Categories seeded (db:init).');
 
+    // Note: productsData user_id will be NULL as no default seller is created/assigned here.
+    // Paths for images are relative; ensure your static file serving setup matches.
     const productsData = [
     {
       name: 'Refurbished iPhone 13 Pro',
@@ -144,8 +149,8 @@ async function initializeDatabaseSchema() {
       condition: 'Excellent',
       stock_quantity: 15,
       category_name: 'Mobiles',
-      image_url: '/images/products/iphone_13_pro_main.jpg',
-      images: JSON.stringify(['/images/products/iphone_13_pro_1.jpg', '/images/products/iphone_13_pro_2.jpg', '/images/products/iphone_13_pro_3.jpg']),
+      image_url: '/images/products/mobiles/iphone_13_pro_main.jpg', // Example of more specific path
+      images: JSON.stringify(['/images/products/mobiles/iphone_13_pro_1.jpg', '/images/products/mobiles/iphone_13_pro_2.jpg', '/images/products/mobiles/iphone_13_pro_3.jpg']),
       warranty_info: '1-Year Seller Warranty',
       key_features: JSON.stringify(['A15 Bionic Chip', 'Pro Camera System', '120Hz ProMotion Display', 'Surgical-grade stainless steel']),
       brand: 'Apple',
@@ -159,8 +164,8 @@ async function initializeDatabaseSchema() {
       condition: 'Excellent',
       stock_quantity: 10,
       category_name: 'Mobiles',
-      image_url: '/images/products/samsung_s22_ultra_main.jpg',
-      images: JSON.stringify(['/images/products/samsung_s22_ultra_1.jpg', '/images/products/samsung_s22_ultra_2.jpg']),
+      image_url: '/images/products/mobiles/samsung_s22_ultra_main.jpg',
+      images: JSON.stringify(['/images/products/mobiles/samsung_s22_ultra_1.jpg', '/images/products/mobiles/samsung_s22_ultra_2.jpg']),
       warranty_info: '1-Year Seller Warranty',
       key_features: JSON.stringify(['Built-in S Pen', '108MP Camera', 'Dynamic AMOLED 2X Display', 'Snapdragon 8 Gen 1']),
       brand: 'Samsung',
@@ -174,8 +179,8 @@ async function initializeDatabaseSchema() {
       condition: 'Good',
       stock_quantity: 8,
       category_name: 'Laptops',
-      image_url: '/images/products/dell_xps_15_main.jpg',
-      images: JSON.stringify(['/images/products/dell_xps_15_1.jpg', '/images/products/dell_xps_15_2.jpg']),
+      image_url: '/images/products/laptops/dell_xps_15_main.jpg',
+      images: JSON.stringify(['/images/products/laptops/dell_xps_15_1.jpg', '/images/products/laptops/dell_xps_15_2.jpg']),
       warranty_info: '6-Month Seller Warranty',
       key_features: JSON.stringify(['Intel Core i7', 'NVIDIA GeForce RTX Graphics', 'InfinityEdge Display', 'Premium build quality']),
       brand: 'Dell',
@@ -189,8 +194,8 @@ async function initializeDatabaseSchema() {
       condition: 'Excellent',
       stock_quantity: 5,
       category_name: 'TVs',
-      image_url: '/images/products/lg_oled_c1_main.jpg',
-      images: JSON.stringify(['/images/products/lg_oled_c1_1.jpg', '/images/products/lg_oled_c1_2.jpg']),
+      image_url: '/images/products/tvs/lg_oled_c1_main.jpg',
+      images: JSON.stringify(['/images/products/tvs/lg_oled_c1_1.jpg', '/images/products/tvs/lg_oled_c1_2.jpg']),
       warranty_info: '1-Year Seller Warranty',
       key_features: JSON.stringify(['Self-lit OLED Pixels', 'a9 Gen4 AI Processor 4K', 'Dolby Vision IQ & Atmos', 'Gaming: G-SYNC, FreeSync']),
       brand: 'LG',
@@ -204,8 +209,8 @@ async function initializeDatabaseSchema() {
       condition: 'Good',
       stock_quantity: 12,
       category_name: 'Fridges',
-      image_url: '/images/products/whirlpool_fridge_main.jpg',
-      images: JSON.stringify(['/images/products/whirlpool_fridge_1.jpg', '/images/products/whirlpool_fridge_2.jpg']),
+      image_url: '/images/products/fridges/whirlpool_fridge_main.jpg',
+      images: JSON.stringify(['/images/products/fridges/whirlpool_fridge_1.jpg', '/images/products/fridges/whirlpool_fridge_2.jpg']),
       warranty_info: '6-Month Seller Warranty',
       key_features: JSON.stringify(['250 Litre Capacity', 'Frost-Free Operation', 'Toughened Glass Shelves', 'Energy Efficient']),
       brand: 'Whirlpool',
@@ -219,8 +224,8 @@ async function initializeDatabaseSchema() {
       condition: 'Excellent',
       stock_quantity: 7,
       category_name: 'ACs',
-      image_url: '/images/products/bluestar_ac_main.jpg',
-      images: JSON.stringify(['/images/products/bluestar_ac_1.jpg', '/images/products/bluestar_ac_2.jpg']),
+      image_url: '/images/products/acs/bluestar_ac_main.jpg',
+      images: JSON.stringify(['/images/products/acs/bluestar_ac_1.jpg', '/images/products/acs/bluestar_ac_2.jpg']),
       warranty_info: '1-Year Compressor Warranty, 3-Month Seller Warranty on unit',
       key_features: JSON.stringify(['Inverter Technology', '1.5 Ton Capacity', 'Dust Filter', 'Quiet Operation']),
       brand: 'Blue Star',
@@ -230,8 +235,8 @@ async function initializeDatabaseSchema() {
   ];
 
     const insertProduct = await db.prepare(`
-      INSERT OR IGNORE INTO products (name, description, price, condition, stock_quantity, category_id, image_url, images, warranty_info, key_features, brand, model, specifications) 
-      VALUES (?, ?, ?, ?, ?, (SELECT id FROM categories WHERE name = ?), ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR IGNORE INTO products (name, description, price, condition, stock_quantity, category_id, image_url, images, warranty_info, key_features, brand, model, specifications, user_id) 
+      VALUES (?, ?, ?, ?, ?, (SELECT id FROM categories WHERE name = ?), ?, ?, ?, ?, ?, ?, ?, NULL) -- user_id set to NULL for seeded products
     `);
     for (const product of productsData) {
       await insertProduct.run(
