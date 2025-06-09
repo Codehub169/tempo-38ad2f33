@@ -2,9 +2,14 @@ import { openDb } from "../db/setup.js";
 
 // Get all products with filtering, sorting, and pagination
 export const getAllProducts = async (req, res) => {
-  const db = await openDb();
+  let db;
   try {
+    db = await openDb();
     const { category, condition, minPrice, maxPrice, search, sortBy, sortOrder = "ASC", page = 1, limit = 10 } = req.query;
+
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const limitNum = Math.max(1, parseInt(String(limit), 10) || 10);
+    const sortOrderNormalized = sortOrder.toUpperCase() === "DESC" ? "DESC" : "ASC";
 
     let query = `
       SELECT 
@@ -15,171 +20,171 @@ export const getAllProducts = async (req, res) => {
       JOIN categories c ON p.category_id = c.id
     `;
     const whereClauses = [];
-    const params = {};
+    const filterParams = {}; // Params for WHERE clause, used by both main and count query
 
     if (category) {
-      // Allow multiple categories, comma-separated
-      const categoryNames = category.split(',').map(c => c.trim());
+      const categoryNames = category.split(',').map(c => c.trim()).filter(c => c.length > 0);
       if (categoryNames.length > 0) {
         whereClauses.push(`c.name IN (${categoryNames.map((_, i) => `:category_name_${i}`).join(', ')})`);
         categoryNames.forEach((catName, i) => {
-          params[`:category_name_${i}`] = catName;
+          filterParams[`:category_name_${i}`] = catName;
         });
       }
     }
     if (condition) {
-      // Allow multiple conditions, comma-separated
-      const conditions = condition.split(',').map(c => c.trim());
+      const conditions = condition.split(',').map(c => c.trim()).filter(c => c.length > 0);
       if (conditions.length > 0) {
         whereClauses.push(`p.condition IN (${conditions.map((_, i) => `:condition_${i}`).join(', ')})`);
         conditions.forEach((cond, i) => {
-          params[`:condition_${i}`] = cond;
+          filterParams[`:condition_${i}`] = cond;
         });
       }
     }
     if (minPrice) {
-      whereClauses.push("p.price >= :minPrice");
-      params[":minPrice"] = parseFloat(minPrice);
+      const priceVal = parseFloat(minPrice);
+      if (!isNaN(priceVal)) {
+        whereClauses.push("p.price >= :minPrice");
+        filterParams[":minPrice"] = priceVal;
+      }
     }
     if (maxPrice) {
-      whereClauses.push("p.price <= :maxPrice");
-      params[":maxPrice"] = parseFloat(maxPrice);
+      const priceVal = parseFloat(maxPrice);
+      if (!isNaN(priceVal)){
+        whereClauses.push("p.price <= :maxPrice");
+        filterParams[":maxPrice"] = priceVal;
+      }
     }
     if (search) {
       whereClauses.push("(p.name LIKE :search OR p.description LIKE :search OR p.brand LIKE :search OR p.model LIKE :search)");
-      params[":search"] = `%${search}%`;
+      filterParams[":search"] = `%${search}%`;
     }
 
+    let whereString = "";
     if (whereClauses.length > 0) {
-      query += " WHERE " + whereClauses.join(" AND ");
+      whereString = " WHERE " + whereClauses.join(" AND ");
+      query += whereString;
     }
 
-    // Sorting
-    const validSortBy = ["price", "name", "condition", "stock_quantity"]; // Add more as needed
-    if (sortBy && validSortBy.includes(sortBy)) {
-      const order = sortOrder.toUpperCase() === "DESC" ? "DESC" : "ASC";
-      query += ` ORDER BY p.${sortBy} ${order}`;
+    const countQuery = `SELECT COUNT(p.id) as total FROM products p JOIN categories c ON p.category_id = c.id` + whereString;
+
+    const validSortByFields = ["price", "name", "condition", "stock_quantity"];
+    if (sortBy && validSortByFields.includes(sortBy)) {
+      query += ` ORDER BY p.${sortBy} ${sortOrderNormalized}`;
     } else {
       query += " ORDER BY p.name ASC"; // Default sort
     }
 
-    // Pagination
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (pageNum - 1) * limitNum;
     query += " LIMIT :limit OFFSET :offset";
-    params[":limit"] = parseInt(limit);
-    params[":offset"] = offset;
+    
+    const mainQueryParams = { ...filterParams };
+    mainQueryParams[":limit"] = limitNum;
+    mainQueryParams[":offset"] = offset;
 
-    const products = await db.all(query, params);
-
-    // Get total count for pagination metadata
-    let countQuery = `SELECT COUNT(p.id) as total FROM products p JOIN categories c ON p.category_id = c.id`;
-    if (whereClauses.length > 0) {
-      // Rebuild where clauses for count, excluding category name mapping for simplicity here if not searching by category name directly
-      // This might need adjustment if category name search is complex
-      let countWhereClauses = [];
-      const countParams = {};
-      if (category) {
-        const categoryNames = category.split(',').map(c => c.trim());
-        if (categoryNames.length > 0) {
-          countWhereClauses.push(`c.name IN (${categoryNames.map((_, i) => `:category_name_${i}`).join(', ')})`);
-          categoryNames.forEach((catName, i) => {
-            countParams[`:category_name_${i}`] = catName;
-          });
-        }
+    const products = await db.all(query, mainQueryParams);
+    const { total } = await db.get(countQuery, filterParams);
+    
+    res.json({
+      data: products.map(p => ({
+        ...p,
+        images: JSON.parse(p.images || '[]'),
+        key_features: JSON.parse(p.key_features || '[]'),
+        specifications: JSON.parse(p.specifications || '{}')
+      })),
+      pagination: {
+        totalItems: total,
+        totalPages: Math.ceil(total / limitNum),
+        currentPage: pageNum,
+        pageSize: limitNum
       }
-      if (condition) {
-        const conditions = condition.split(',').map(c => c.trim());
-        if (conditions.length > 0) {
-         countWhereClauses.push(`p.condition IN (${conditions.map((_, i) => `:condition_${i}`).join(', ')})`);
-          conditions.forEach((cond, i) => {
-            countParams[`:condition_${i}`] = cond;
-          });
-        }
-      }
-      if (minPrice) { countWhereClauses.push("p.price >= :minPrice"); countParams[":minPrice"] = parseFloat(minPrice); }
-      if (maxPrice) { countWhereClauses.push("p.price <= :maxPrice"); countParams[":maxPrice"] = parseFloat(maxPrice); }
-      if (search) { countWhereClauses.push("(p.name LIKE :search OR p.description LIKE :search OR p.brand LIKE :search OR p.model LIKE :search)"); countParams[":search"] = `%${search}%`; }
-      
-      if (countWhereClauses.length > 0) {
-        countQuery += " WHERE " + countWhereClauses.join(" AND ");
-      }
-      const { total } = await db.get(countQuery, countParams);
-      res.json({
-        data: products.map(p => ({...p, images: JSON.parse(p.images || '[]'), key_features: JSON.parse(p.key_features || '[]'), specifications: JSON.parse(p.specifications || '{}')})),
-        pagination: {
-          totalItems: total,
-          totalPages: Math.ceil(total / parseInt(limit)),
-          currentPage: parseInt(page),
-          pageSize: parseInt(limit)
-        }
-      });
-    } else {
-      const { total } = await db.get(countQuery);
-      res.json({
-        data: products.map(p => ({...p, images: JSON.parse(p.images || '[]'), key_features: JSON.parse(p.key_features || '[]'), specifications: JSON.parse(p.specifications || '{}')})),
-        pagination: {
-          totalItems: total,
-          totalPages: Math.ceil(total / parseInt(limit)),
-          currentPage: parseInt(page),
-          pageSize: parseInt(limit)
-        }
-      });
-    }
+    });
 
   } catch (error) {
-    console.error("Error fetching products:", error);
-    res.status(500).json({ message: "Error fetching products", error: error.message });
+    console.error("Error in getAllProducts:", error);
+    if (!res.headersSent) {
+        res.status(500).json({ message: "Error fetching products", error: error.message });
+    }
   } finally {
-    await db.close();
+    if (db) {
+      try {
+        await db.close();
+      } catch (closeError) {
+        console.error("Error closing database connection in getAllProducts:", closeError);
+      }
+    }
   }
 };
 
 // Get a single product by ID
 export const getProductById = async (req, res) => {
-  const db = await openDb();
+  let db;
   try {
+    db = await openDb();
     const { id } = req.params;
     const product = await db.get(
       `SELECT p.*, c.name as category_name 
        FROM products p 
        JOIN categories c ON p.category_id = c.id 
-       WHERE p.id = ?`,
-      id
+       WHERE p.id = :id`,
+      { ':id': id }
     );
     if (product) {
       res.json({...product, images: JSON.parse(product.images || '[]'), key_features: JSON.parse(product.key_features || '[]'), specifications: JSON.parse(product.specifications || '{}')});
     } else {
-      res.status(404).json({ message: "Product not found" });
+      if (!res.headersSent) {
+        res.status(404).json({ message: "Product not found" });
+      }
     }
   } catch (error) {
-    console.error(`Error fetching product with id ${req.params.id}:`, error);
-    res.status(500).json({ message: "Error fetching product", error: error.message });
+    console.error(`Error in getProductById for ID ${req.params.id}:`, error);
+    if (!res.headersSent) {
+        res.status(500).json({ message: "Error fetching product", error: error.message });
+    }
   } finally {
-    await db.close();
+    if (db) {
+      try {
+        await db.close();
+      } catch (closeError) {
+        console.error("Error closing database connection in getProductById:", closeError);
+      }
+    }
   }
 };
 
 // Get all categories
 export const getCategories = async (req, res) => {
-  const db = await openDb();
+  let db;
   try {
+    db = await openDb();
     const categories = await db.all("SELECT * FROM categories ORDER BY name ASC");
     res.json(categories);
   } catch (error) {
-    console.error("Error fetching categories:", error);
-    res.status(500).json({ message: "Error fetching categories", error: error.message });
+    console.error("Error in getCategories:", error);
+    if (!res.headersSent) {
+        res.status(500).json({ message: "Error fetching categories", error: error.message });
+    }
   } finally {
-    await db.close();
+    if (db) {
+      try {
+        await db.close();
+      } catch (closeError) {
+        console.error("Error closing database connection in getCategories:", closeError);
+      }
+    }
   }
 };
 
 // Get products by category name
 export const getProductsByCategory = async (req, res) => {
-  const db = await openDb();
+  let db;
   try {
+    db = await openDb();
     const { categoryName } = req.params;
     const { page = 1, limit = 10, sortBy, sortOrder = "ASC" } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const limitNum = Math.max(1, parseInt(String(limit), 10) || 10);
+    const sortOrderNormalized = sortOrder.toUpperCase() === "DESC" ? "DESC" : "ASC";
 
     let query = `
       SELECT p.*, c.name as category_name 
@@ -189,23 +194,23 @@ export const getProductsByCategory = async (req, res) => {
     `;
     const params = { ':categoryName': categoryName };
 
-    const validSortBy = ["price", "name", "condition"];
-    if (sortBy && validSortBy.includes(sortBy)) {
-      const order = sortOrder.toUpperCase() === "DESC" ? "DESC" : "ASC";
-      query += ` ORDER BY p.${sortBy} ${order}`;
+    const validSortByFields = ["price", "name", "condition", "stock_quantity"];
+    if (sortBy && validSortByFields.includes(sortBy)) {
+      query += ` ORDER BY p.${sortBy} ${sortOrderNormalized}`;
     } else {
       query += " ORDER BY p.name ASC";
     }
 
+    const offset = (pageNum - 1) * limitNum;
     query += " LIMIT :limit OFFSET :offset";
-    params[':limit'] = parseInt(limit);
+    params[':limit'] = limitNum;
     params[':offset'] = offset;
 
     const products = await db.all(query, params);
 
     const countResult = await db.get(
-      "SELECT COUNT(p.id) as total FROM products p JOIN categories c ON p.category_id = c.id WHERE c.name = ?",
-      categoryName
+      "SELECT COUNT(p.id) as total FROM products p JOIN categories c ON p.category_id = c.id WHERE c.name = :categoryName",
+      { ':categoryName': categoryName }
     );
     const total = countResult.total;
 
@@ -213,15 +218,23 @@ export const getProductsByCategory = async (req, res) => {
       data: products.map(p => ({...p, images: JSON.parse(p.images || '[]'), key_features: JSON.parse(p.key_features || '[]'), specifications: JSON.parse(p.specifications || '{}')})),
       pagination: {
         totalItems: total,
-        totalPages: Math.ceil(total / parseInt(limit)),
-        currentPage: parseInt(page),
-        pageSize: parseInt(limit)
+        totalPages: Math.ceil(total / limitNum),
+        currentPage: pageNum,
+        pageSize: limitNum
       }
     });
   } catch (error) {
-    console.error(`Error fetching products for category ${req.params.categoryName}:`, error);
-    res.status(500).json({ message: "Error fetching products by category", error: error.message });
+    console.error(`Error in getProductsByCategory for category ${req.params.categoryName}:`, error);
+    if (!res.headersSent) {
+        res.status(500).json({ message: "Error fetching products by category", error: error.message });
+    }
   } finally {
-    await db.close();
+    if (db) {
+      try {
+        await db.close();
+      } catch (closeError) {
+        console.error("Error closing database connection in getProductsByCategory:", closeError);
+      }
+    }
   }
 };
