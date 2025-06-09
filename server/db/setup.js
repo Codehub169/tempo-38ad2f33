@@ -1,124 +1,140 @@
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import { fileURLToPath } from 'url';
-import path from 'path'; // Added for robust path resolution
+import path from 'path';
 
-// Determine the directory of the current module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Define the database file path relative to this script's directory
 const dbFilePath = path.join(__dirname, 'database.sqlite');
 
-// Function to open the database connection
-async function openDb() {
-  return open({
-    filename: dbFilePath, // Use absolute path for robustness
-    driver: sqlite3.Database
-  });
-}
+// For shared application database connection
+let appDbPromise = null;
 
-// Function to initialize the database schema
-async function initializeDatabase() {
-  const db = await openDb();
-
-  console.log('Starting database initialization...');
-
-  // Enable foreign key support
-  await db.exec('PRAGMA foreign_keys = ON;');
-
-  // Create categories table
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS categories (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE
-    );
-  `);
-  console.log('Categories table created or already exists.');
-
-  // Create products table
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS products (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      description TEXT,
-      price REAL NOT NULL,
-      condition TEXT CHECK(condition IN ('Excellent', 'Good', 'Fair')) NOT NULL,
-      stock_quantity INTEGER NOT NULL DEFAULT 0,
-      category_id INTEGER,
-      image_url TEXT,
-      images TEXT, -- JSON array of image URLs for gallery
-      warranty_info TEXT,
-      key_features TEXT, -- JSON array of key features
-      brand TEXT,
-      model TEXT,
-      specifications TEXT, -- JSON object for detailed specs
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
-    );
-  `);
-  console.log('Products table created or already exists.');
-
-  // Create orders table
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS orders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      customer_name TEXT NOT NULL,
-      customer_email TEXT NOT NULL,
-      shipping_address TEXT NOT NULL, -- JSON object for address
-      total_amount REAL NOT NULL,
-      status TEXT DEFAULT 'Pending' CHECK(status IN ('Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled')),
-      order_date DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-  console.log('Orders table created or already exists.');
-
-  // Create order_items table
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS order_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      order_id INTEGER NOT NULL,
-      product_id INTEGER NOT NULL,
-      quantity INTEGER NOT NULL,
-      price_at_purchase REAL NOT NULL,
-      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT 
-    );
-  `);
-  console.log('Order_items table created or already exists.');
-  
-  // Create users table (basic for future use)
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        name TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-  console.log('Users table created or already exists.');
-
-  // Seed initial data (Categories)
-  const categories = [
-    { name: 'Mobiles' },
-    { name: 'TVs' },
-    { name: 'Laptops' },
-    { name: 'Fridges' },
-    { name: 'ACs' },
-    { name: 'Appliances' }
-  ];
-
-  const insertCategory = await db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)');
-  for (const category of categories) {
-    await insertCategory.run(category.name);
+const getAppDb = () => {
+  if (!appDbPromise) {
+    appDbPromise = open({
+      filename: dbFilePath,
+      driver: sqlite3.Database
+    }).then(async db => {
+      console.log('Application database connection established.');
+      await db.exec('PRAGMA foreign_keys = ON;');
+      return db;
+    }).catch(err => {
+      console.error('FATAL: Failed to open application database connection:', err);
+      appDbPromise = null; // Reset for potential retry, though app might fail to start
+      throw err; // Critical error, should prevent app startup or be handled
+    });
   }
-  await insertCategory.finalize();
-  console.log('Categories seeded.');
+  return appDbPromise;
+};
 
-  // Seed initial data (Products) - More detailed example
-  const productsData = [
+const closeAppDb = async () => {
+  if (appDbPromise) {
+    try {
+      const db = await appDbPromise; // Ensure promise is resolved
+      await db.close();
+      console.log('Application database connection closed.');
+    } catch (err) {
+      console.error('Error closing application database connection:', err);
+    } finally {
+      appDbPromise = null; // Reset the promise
+    }
+  }
+};
+
+// Function to initialize the database schema (for db:init script)
+async function initializeDatabaseSchema() {
+  // This function uses its own local connection, not the shared appDbPromise
+  let db;
+  try {
+    db = await open({
+      filename: dbFilePath,
+      driver: sqlite3.Database
+    });
+    console.log('Starting database schema initialization (for db:init)...');
+
+    await db.exec('PRAGMA foreign_keys = ON;');
+
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE
+      );
+    `);
+    console.log('Categories table created or already exists (db:init).');
+
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        price REAL NOT NULL,
+        condition TEXT CHECK(condition IN ('Excellent', 'Good', 'Fair')) NOT NULL,
+        stock_quantity INTEGER NOT NULL DEFAULT 0,
+        category_id INTEGER,
+        image_url TEXT,
+        images TEXT, -- JSON array of image URLs for gallery
+        warranty_info TEXT,
+        key_features TEXT, -- JSON array of key features
+        brand TEXT,
+        model TEXT,
+        specifications TEXT, -- JSON object for detailed specs
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+      );
+    `);
+    console.log('Products table created or already exists (db:init).');
+
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_name TEXT NOT NULL,
+        customer_email TEXT NOT NULL,
+        shipping_address TEXT NOT NULL, -- JSON object for address
+        total_amount REAL NOT NULL,
+        status TEXT DEFAULT 'Pending' CHECK(status IN ('Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled')),
+        order_date DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('Orders table created or already exists (db:init).');
+
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        quantity INTEGER NOT NULL,
+        price_at_purchase REAL NOT NULL,
+        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT 
+      );
+    `);
+    console.log('Order_items table created or already exists (db:init).');
+    
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          name TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('Users table created or already exists (db:init).');
+
+    const categories = [
+      { name: 'Mobiles' }, { name: 'TVs' }, { name: 'Laptops' }, 
+      { name: 'Fridges' }, { name: 'ACs' }, { name: 'Appliances' }
+    ];
+    const insertCategory = await db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)');
+    for (const category of categories) {
+      await insertCategory.run(category.name);
+    }
+    await insertCategory.finalize();
+    console.log('Categories seeded (db:init).');
+
+    const productsData = [
     {
       name: 'Refurbished iPhone 13 Pro',
       description: 'Experience the power of Pro. A15 Bionic chip, Pro camera system, and Super Retina XDR display with ProMotion.',
@@ -211,51 +227,41 @@ async function initializeDatabase() {
     }
   ];
 
-  const insertProduct = await db.prepare(`
-    INSERT OR IGNORE INTO products (name, description, price, condition, stock_quantity, category_id, image_url, images, warranty_info, key_features, brand, model, specifications) 
-    VALUES (?, ?, ?, ?, ?, (SELECT id FROM categories WHERE name = ?), ?, ?, ?, ?, ?, ?, ?)
-  `);
-  for (const product of productsData) {
-    await insertProduct.run(
-      product.name,
-      product.description,
-      product.price,
-      product.condition,
-      product.stock_quantity,
-      product.category_name,
-      product.image_url,
-      product.images,
-      product.warranty_info,
-      product.key_features,
-      product.brand,
-      product.model,
-      product.specifications
-    );
-  }
-  await insertProduct.finalize();
-  console.log('Products seeded.');
+    const insertProduct = await db.prepare(`
+      INSERT OR IGNORE INTO products (name, description, price, condition, stock_quantity, category_id, image_url, images, warranty_info, key_features, brand, model, specifications) 
+      VALUES (?, ?, ?, ?, ?, (SELECT id FROM categories WHERE name = ?), ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const product of productsData) {
+      await insertProduct.run(
+        product.name, product.description, product.price, product.condition, product.stock_quantity,
+        product.category_name, product.image_url, product.images, product.warranty_info,
+        product.key_features, product.brand, product.model, product.specifications
+      );
+    }
+    await insertProduct.finalize();
+    console.log('Products seeded (db:init).');
 
-  await db.close();
-  console.log('Database initialization complete. Connection closed.');
+  } catch (error) {
+    console.error('Error during database schema initialization (db:init):', error);
+    throw error; // Re-throw to be caught by the calling script
+  } finally {
+    if (db) {
+      await db.close();
+      console.log('Database schema initialization connection closed (db:init).');
+    }
+  }
 }
 
-// Export openDb for controllers and other modules
-export { openDb };
+export { getAppDb, closeAppDb }; // For server.js and controllers
 
-// Run initialization only if this script is executed directly by Node.js
-// process.argv[1] is the path of the script being run (absolute).
-// fileURLToPath(import.meta.url) is the path of the current module (absolute).
-// Node: In some environments or with some bundlers, process.argv[1] might not be reliable.
-// A more common check is `require.main === module` for CJS, or specific checks for ES modules.
-// For ES modules, comparing the executed script path with the module path is a good approach.
-
+// Run initialization only if this script is executed directly
 const mainScriptPath = process.argv[1];
 const currentModulePath = fileURLToPath(import.meta.url);
 
 if (mainScriptPath === currentModulePath) {
-  console.log('INFO: db/setup.js is being run directly. Initializing database...');
-  initializeDatabase().catch(err => {
-    console.error('FATAL: Database initialization failed during direct execution.', err);
-    process.exit(1); // Exit if direct setup fails
+  console.log('INFO: db/setup.js is being run directly. Initializing database schema...');
+  initializeDatabaseSchema().catch(err => {
+    console.error('FATAL: Database schema initialization failed during direct execution.', err);
+    process.exit(1);
   });
 }

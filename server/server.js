@@ -3,106 +3,105 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Import routes
 import productRoutes from './routes/productRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
+import { getAppDb, closeAppDb } from './db/setup.js'; // Import DB management functions
 
-// Since we are using ES modules, __dirname is not available directly.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Define serverInstance so it's accessible in handlers
 let serverInstance;
-
 const app = express();
 const PORT = process.env.PORT || 9000;
 
 // Middleware
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:3000', 'http://localhost:5173', `http://localhost:${PORT}`];
 const corsOptions = {
-  // In production, specify allowed origins. Example:
-  // origin: process.env.NODE_ENV === 'production' ? 'https://yourdomain.com' : ['https://yourdomain.com', 'https://another.domain.com'],
-  origin: true, // Allows all origins for now, similar to app.use(cors()). For development only.
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1 && process.env.NODE_ENV === 'production') {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true // If you need to handle cookies or authorization headers
+  credentials: true
 };
 app.use(cors(corsOptions)); 
-app.use(express.json()); // Parse JSON request bodies
-app.disable('x-powered-by'); // Security best practice: hide Express usage
+app.use(express.json({ limit: '1mb' })); // Limit payload size for security
+app.disable('x-powered-by');
 
 // API Routes
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 
-// Serve static files from the React app build directory
+// Serve static files
 const clientDistPath = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDistPath));
 
-// The "catchall" handler: for any request that doesn't match one above,
-// send back React's index.html file.
 app.get('*', (req, res, next) => {
-  // Avoid sending index.html for API-like paths that weren't caught by API routers
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API endpoint not found' });
   }
-  
   const indexPath = path.join(clientDistPath, 'index.html');
   res.sendFile(indexPath, (err) => {
     if (err) {
-        // If sendFile fails (e.g., file not found, or other I/O error),
-        // pass error to Express error handler.
-        // Set a specific status if it's a file not found type error
-        if (err.code === 'ENOENT') {
-            err.status = 404;
-            err.message = `Entry point ${indexPath} not found. Ensure the client application is built.`;
-        }
-        next(err);
+      if (err.code === 'ENOENT') {
+        // err.status = 404; // This is fine, but Express default for ENOENT from sendFile is usually 404
+        // More descriptive message for client build issue
+        console.error(`Entry point ${indexPath} not found. Ensure the client application is built and clientDistPath is correct.`);
+        res.status(404).send(`Frontend entry point not found. Client application might not be built. Please check server logs.`);
+      } else {
+        next(err); // Pass other errors to the global error handler
+      }
     }
   });
 });
 
 // Global Express error handler
 app.use((err, req, res, next) => {
-  console.error('EXPRESS ERROR HANDLER:', err.stack);
+  console.error('EXPRESS ERROR HANDLER:', err.stack || err);
   const status = err.status || err.statusCode || 500;
-  let message = 'Something broke on the server!';
-  
-  // Provide more detailed error messages in non-production environments
+  let message = 'An unexpected error occurred on the server.';
   if (process.env.NODE_ENV !== 'production') {
-    message = err.message || (typeof err === 'string' ? err : 'Internal Server Error');
+    message = err.message || (typeof err === 'string' ? err : 'Internal Server Error (Development Mode)');
   }
-  
-  // Ensure response is sent only if headers haven't been sent yet
   if (!res.headersSent) {
     res.status(status).json({ error: message });
   } else {
-    // If headers already sent, delegate to the default Express error handler
-    // This typically means the error occurred while streaming the response
     next(err); 
   }
 });
 
-// Start server
-serverInstance = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Serving frontend from: ${clientDistPath}`);
-  console.log(`API available at http://localhost:${PORT}/api`);
-});
-
 // Graceful shutdown logic
-const gracefulShutdown = (signal) => {
-  console.log(`${signal} signal received: closing HTTP server`);
-  
-  if (serverInstance && serverInstance.listening) {
-    console.log('Closing HTTP server...');
-    serverInstance.close(() => {
-      console.log('HTTP server closed.');
-      // Add any other cleanup here (e.g., closing database connection pools if managed globally)
-      process.exit(0);
-    });
-  } else {
-    console.log('HTTP server was not running or already closed.');
-    process.exit(0);
+const gracefulShutdown = async (signal) => {
+  console.log(`${signal} signal received: closing HTTP server and database connection.`);
+  let exitCode = 0;
+  try {
+    if (serverInstance && serverInstance.listening) {
+      console.log('Closing HTTP server...');
+      await new Promise((resolve, reject) => {
+        serverInstance.close((err) => {
+          if (err) {
+            console.error('Error closing HTTP server:', err);
+            exitCode = 1;
+            return reject(err);
+          }
+          console.log('HTTP server closed.');
+          resolve();
+        });
+      });
+    }
+    await closeAppDb();
+  } catch (error) {
+    console.error('Error during graceful shutdown:', error);
+    exitCode = 1;
+  } finally {
+    console.log('Exiting process.');
+    process.exit(exitCode);
   }
 };
 
@@ -112,38 +111,59 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // Uncaught Exception Handler
 process.on('uncaughtException', (error, origin) => {
   console.error(`UNCAUGHT EXCEPTION! Origin: ${origin}`, error);
-  
-  // Attempt to gracefully close the server first, then exit.
-  // This is a last resort; ideally, all errors should be caught.
+  // Perform minimal cleanup and exit immediately. Avoid complex async operations.
   if (serverInstance && serverInstance.listening) {
-    console.log('Closing HTTP server due to uncaught exception...');
     serverInstance.close(() => {
-      console.log('HTTP server closed due to uncaught exception.');
-      process.exit(1); // Exit with error code
+      closeAppDb().finally(() => process.exit(1));
     });
   } else {
-    console.log('HTTP server was not running or already closed during uncaught exception.');
-    process.exit(1); // Exit with error code
+    closeAppDb().finally(() => process.exit(1));
   }
   // Set a timeout to force exit if graceful shutdown hangs
   setTimeout(() => {
     console.error('Graceful shutdown timed out during uncaught exception. Forcing exit.');
     process.exit(1);
-  }, 5000).unref(); // 5 seconds timeout
+  }, 5000).unref();
 });
 
 // Unhandled Rejection Handler
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('UNHANDLED PROMISE REJECTION! Details below. Shutting down...');
-  console.error('Reason:', reason);
-  // console.error('Promise:', promise); // Promise object can be verbose
-  
-  // It's recommended to treat unhandled rejections as critical errors.
+  console.error('UNHANDLED PROMISE REJECTION! Reason:', reason);
+  // Treat unhandled rejections as uncaught exceptions
   // Throwing here will allow 'uncaughtException' handler to manage shutdown.
   if (reason instanceof Error) {
     throw reason;
   } else {
-    // Wrap non-Error reasons in an Error object for better stack traces
     throw new Error(`Unhandled promise rejection with non-Error reason: ${JSON.stringify(reason)}`);
   }
 });
+
+// Start server function
+async function startServer() {
+  try {
+    await getAppDb(); // Pre-warm/initialize the database connection
+    console.log('Database connection successfully pre-warmed for application.');
+
+    serverInstance = app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`Serving frontend from: ${clientDistPath}`);
+      console.log(`API available at http://localhost:${PORT}/api`);
+    });
+
+    serverInstance.on('error', (error) => { 
+        console.error('HTTP Server error:', error);
+        if (error.code === 'EADDRINUSE') {
+            console.error(`Port ${PORT} is already in use. Attempting to close DB and exit.`);
+            closeAppDb().finally(() => process.exit(1));
+        } else {
+            gracefulShutdown('SERVER_ERROR');
+        }
+    });
+
+  } catch (dbError) {
+    console.error('FATAL: Failed to initialize database on startup. Exiting.', dbError);
+    await closeAppDb().finally(() => process.exit(1));
+  }
+}
+
+startServer();

@@ -1,10 +1,9 @@
-import { openDb } from "../db/setup.js";
+import { getAppDb } from "../db/setup.js";
 
 // Get all products with filtering, sorting, and pagination
 export const getAllProducts = async (req, res) => {
-  let db;
   try {
-    db = await openDb();
+    const db = await getAppDb();
     const { category, condition, minPrice, maxPrice, search, sortBy, sortOrder = "ASC", page = 1, limit = 10 } = req.query;
 
     const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
@@ -20,10 +19,10 @@ export const getAllProducts = async (req, res) => {
       JOIN categories c ON p.category_id = c.id
     `;
     const whereClauses = [];
-    const filterParams = {}; // Params for WHERE clause, used by both main and count query
+    const filterParams = {};
 
     if (category) {
-      const categoryNames = category.split(',').map(c => c.trim()).filter(c => c.length > 0);
+      const categoryNames = String(category).split(',').map(c => c.trim()).filter(c => c.length > 0);
       if (categoryNames.length > 0) {
         whereClauses.push(`c.name IN (${categoryNames.map((_, i) => `:category_name_${i}`).join(', ')})`);
         categoryNames.forEach((catName, i) => {
@@ -32,7 +31,7 @@ export const getAllProducts = async (req, res) => {
       }
     }
     if (condition) {
-      const conditions = condition.split(',').map(c => c.trim()).filter(c => c.length > 0);
+      const conditions = String(condition).split(',').map(c => c.trim()).filter(c => c.length > 0);
       if (conditions.length > 0) {
         whereClauses.push(`p.condition IN (${conditions.map((_, i) => `:condition_${i}`).join(', ')})`);
         conditions.forEach((cond, i) => {
@@ -41,14 +40,14 @@ export const getAllProducts = async (req, res) => {
       }
     }
     if (minPrice) {
-      const priceVal = parseFloat(minPrice);
+      const priceVal = parseFloat(String(minPrice));
       if (!isNaN(priceVal)) {
         whereClauses.push("p.price >= :minPrice");
         filterParams[":minPrice"] = priceVal;
       }
     }
     if (maxPrice) {
-      const priceVal = parseFloat(maxPrice);
+      const priceVal = parseFloat(String(maxPrice));
       if (!isNaN(priceVal)){
         whereClauses.push("p.price <= :maxPrice");
         filterParams[":maxPrice"] = priceVal;
@@ -56,7 +55,7 @@ export const getAllProducts = async (req, res) => {
     }
     if (search) {
       whereClauses.push("(p.name LIKE :search OR p.description LIKE :search OR p.brand LIKE :search OR p.model LIKE :search)");
-      filterParams[":search"] = `%${search}%`;
+      filterParams[":search"] = `%${String(search)}%`;
     }
 
     let whereString = "";
@@ -68,11 +67,11 @@ export const getAllProducts = async (req, res) => {
     const countQuery = `SELECT COUNT(p.id) as total FROM products p JOIN categories c ON p.category_id = c.id` + whereString;
 
     const validSortByFields = ["price", "name", "condition", "stock_quantity"];
-    if (sortBy && validSortByFields.includes(sortBy)) {
-      query += ` ORDER BY p.${sortBy} ${sortOrderNormalized}`;
-    } else {
-      query += " ORDER BY p.name ASC"; // Default sort
+    let orderByClause = " ORDER BY p.name ASC"; // Default sort
+    if (sortBy && validSortByFields.includes(String(sortBy))) {
+      orderByClause = ` ORDER BY p.${String(sortBy)} ${sortOrderNormalized}`;
     }
+    query += orderByClause;
 
     const offset = (pageNum - 1) * limitNum;
     query += " LIMIT :limit OFFSET :offset";
@@ -82,7 +81,8 @@ export const getAllProducts = async (req, res) => {
     mainQueryParams[":offset"] = offset;
 
     const products = await db.all(query, mainQueryParams);
-    const { total } = await db.get(countQuery, filterParams);
+    const totalResult = await db.get(countQuery, filterParams);
+    const total = totalResult ? totalResult.total : 0;
     
     res.json({
       data: products.map(p => ({
@@ -104,22 +104,13 @@ export const getAllProducts = async (req, res) => {
     if (!res.headersSent) {
         res.status(500).json({ message: "Error fetching products", error: error.message });
     }
-  } finally {
-    if (db) {
-      try {
-        await db.close();
-      } catch (closeError) {
-        console.error("Error closing database connection in getAllProducts:", closeError);
-      }
-    }
   }
 };
 
 // Get a single product by ID
 export const getProductById = async (req, res) => {
-  let db;
   try {
-    db = await openDb();
+    const db = await getAppDb();
     const { id } = req.params;
     const product = await db.get(
       `SELECT p.*, c.name as category_name 
@@ -140,22 +131,13 @@ export const getProductById = async (req, res) => {
     if (!res.headersSent) {
         res.status(500).json({ message: "Error fetching product", error: error.message });
     }
-  } finally {
-    if (db) {
-      try {
-        await db.close();
-      } catch (closeError) {
-        console.error("Error closing database connection in getProductById:", closeError);
-      }
-    }
   }
 };
 
 // Get all categories
 export const getCategories = async (req, res) => {
-  let db;
   try {
-    db = await openDb();
+    const db = await getAppDb();
     const categories = await db.all("SELECT * FROM categories ORDER BY name ASC");
     res.json(categories);
   } catch (error) {
@@ -163,22 +145,13 @@ export const getCategories = async (req, res) => {
     if (!res.headersSent) {
         res.status(500).json({ message: "Error fetching categories", error: error.message });
     }
-  } finally {
-    if (db) {
-      try {
-        await db.close();
-      } catch (closeError) {
-        console.error("Error closing database connection in getCategories:", closeError);
-      }
-    }
   }
 };
 
 // Get products by category name
 export const getProductsByCategory = async (req, res) => {
-  let db;
   try {
-    db = await openDb();
+    const db = await getAppDb();
     const { categoryName } = req.params;
     const { page = 1, limit = 10, sortBy, sortOrder = "ASC" } = req.query;
 
@@ -192,14 +165,14 @@ export const getProductsByCategory = async (req, res) => {
       JOIN categories c ON p.category_id = c.id 
       WHERE c.name = :categoryName
     `;
-    const params = { ':categoryName': categoryName };
+    const params = { ':categoryName': String(categoryName) };
 
     const validSortByFields = ["price", "name", "condition", "stock_quantity"];
-    if (sortBy && validSortByFields.includes(sortBy)) {
-      query += ` ORDER BY p.${sortBy} ${sortOrderNormalized}`;
-    } else {
-      query += " ORDER BY p.name ASC";
+    let orderByClause = " ORDER BY p.name ASC"; // Default sort
+    if (sortBy && validSortByFields.includes(String(sortBy))) {
+      orderByClause = ` ORDER BY p.${String(sortBy)} ${sortOrderNormalized}`;
     }
+    query += orderByClause;
 
     const offset = (pageNum - 1) * limitNum;
     query += " LIMIT :limit OFFSET :offset";
@@ -210,9 +183,9 @@ export const getProductsByCategory = async (req, res) => {
 
     const countResult = await db.get(
       "SELECT COUNT(p.id) as total FROM products p JOIN categories c ON p.category_id = c.id WHERE c.name = :categoryName",
-      { ':categoryName': categoryName }
+      { ':categoryName': String(categoryName) }
     );
-    const total = countResult.total;
+    const total = countResult ? countResult.total : 0;
 
     res.json({
       data: products.map(p => ({...p, images: JSON.parse(p.images || '[]'), key_features: JSON.parse(p.key_features || '[]'), specifications: JSON.parse(p.specifications || '{}')})),
@@ -227,14 +200,6 @@ export const getProductsByCategory = async (req, res) => {
     console.error(`Error in getProductsByCategory for category ${req.params.categoryName}:`, error);
     if (!res.headersSent) {
         res.status(500).json({ message: "Error fetching products by category", error: error.message });
-    }
-  } finally {
-    if (db) {
-      try {
-        await db.close();
-      } catch (closeError) {
-        console.error("Error closing database connection in getProductsByCategory:", closeError);
-      }
     }
   }
 };
