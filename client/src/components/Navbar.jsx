@@ -1,5 +1,27 @@
 import React from 'react';
-import { Box, Flex, Heading, Link as ChakraLink, IconButton, Input, InputGroup, InputLeftElement, Stack, useDisclosure, Collapse, Icon, Text, Container, Button, Menu, MenuButton, MenuList, MenuItem, MenuDivider } from '@chakra-ui/react';
+import {
+  Box,
+  Flex,
+  Heading,
+  Link as ChakraLink,
+  IconButton,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  Stack,
+  useDisclosure,
+  Collapse,
+  Icon,
+  Text,
+  Container,
+  Button,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  MenuDivider,
+  Divider // Added Divider import
+} from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { HamburgerIcon, CloseIcon, SearchIcon } from '@chakra-ui/icons';
 import { FaMobileAlt, FaTv, FaSnowflake, FaWind, FaShoppingCart, FaUserCircle } from 'react-icons/fa';
@@ -185,7 +207,7 @@ const Navbar = () => {
                   <Icon as={FaShoppingCart} mr={2} aria-hidden="true" /> My Cart
                   {cartItemCount > 0 && <Text as="span" ml={2} bg="brand.accent" color="white" borderRadius="full" px={2} fontSize="sm">{cartItemCount}</Text>}
               </ChakraLink>
-              <MenuDivider />
+              <Divider borderColor="brand.borderColor" my={2} /> {/* Replaced MenuDivider with Divider */}
               {!isLoading && isAuthenticated && user ? (
                 <>
                   <NavLink href="/profile" icon={FaUserCircle} onClick={onToggle}>My Profile</NavLink>
@@ -201,7 +223,7 @@ const Navbar = () => {
                     fontFamily="body"
                     leftIcon={<Icon as={FaUserCircle} />}
                     width="full"
-                    _hover={{bg: 'gray.100', color: 'brand.primary'}}
+                    _hover={{bg: 'gray.100', color: 'red.500'}}
                   >
                     Logout
                   </Button>
