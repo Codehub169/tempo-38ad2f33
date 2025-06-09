@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import sqlite3 from 'sqlite3';
 
 // Import routes
 import productRoutes from './routes/productRoutes.js';
@@ -12,32 +11,20 @@ import orderRoutes from './routes/orderRoutes.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Define serverInstance and initialDbConnection variables so they are accessible in handlers
+// Define serverInstance so it's accessible in handlers
 let serverInstance;
-let initialDbConnection;
 
 const app = express();
 const PORT = process.env.PORT || 9000;
 
-// Database setup (initial check for connectivity)
-// Controllers will use openDb() from './db/setup.js' for their operations.
-const dbPath = path.join(__dirname, 'db', 'database.sqlite');
-initialDbConnection = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database for initial check:', err.message);
-    initialDbConnection = null; // Mark as failed or unable to open
-  } else {
-    console.log('Connected to the SQLite database for initial check.');
-  }
-});
-
 // Middleware
 const corsOptions = {
   // In production, specify allowed origins. Example:
-  // origin: process.env.NODE_ENV === 'production' ? 'https://yourdomain.com' : '*', 
-  origin: true, // Allows all origins for now, same as app.use(cors())
+  // origin: process.env.NODE_ENV === 'production' ? 'https://yourdomain.com' : ['https://yourdomain.com', 'https://another.domain.com'],
+  origin: true, // Allows all origins for now, similar to app.use(cors()). For development only.
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true // If you need to handle cookies or authorization headers
 };
 app.use(cors(corsOptions)); 
 app.use(express.json()); // Parse JSON request bodies
@@ -58,9 +45,17 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API endpoint not found' });
   }
-  res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
+  
+  const indexPath = path.join(clientDistPath, 'index.html');
+  res.sendFile(indexPath, (err) => {
     if (err) {
-        // If sendFile fails (e.g., file not found), pass error to Express error handler
+        // If sendFile fails (e.g., file not found, or other I/O error),
+        // pass error to Express error handler.
+        // Set a specific status if it's a file not found type error
+        if (err.code === 'ENOENT') {
+            err.status = 404;
+            err.message = `Entry point ${indexPath} not found. Ensure the client application is built.`;
+        }
         next(err);
     }
   });
@@ -72,14 +67,17 @@ app.use((err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   let message = 'Something broke on the server!';
   
+  // Provide more detailed error messages in non-production environments
   if (process.env.NODE_ENV !== 'production') {
     message = err.message || (typeof err === 'string' ? err : 'Internal Server Error');
   }
   
+  // Ensure response is sent only if headers haven't been sent yet
   if (!res.headersSent) {
     res.status(status).json({ error: message });
   } else {
     // If headers already sent, delegate to the default Express error handler
+    // This typically means the error occurred while streaming the response
     next(err); 
   }
 });
@@ -93,34 +91,18 @@ serverInstance = app.listen(PORT, () => {
 
 // Graceful shutdown logic
 const gracefulShutdown = (signal) => {
-  console.log(`${signal} signal received: closing HTTP server and DB`);
+  console.log(`${signal} signal received: closing HTTP server`);
   
-  const closeInitialDb = (callback) => {
-    if (initialDbConnection && typeof initialDbConnection.close === 'function') {
-      console.log('Closing initial check database connection...');
-      initialDbConnection.close((err) => {
-        if (err) {
-          console.error('Error closing the initial check database connection:', err.message);
-        } else {
-          console.log('Initial check database connection closed.');
-        }
-        if (callback) callback();
-      });
-    } else {
-      console.log('Initial check database connection was not open or available to close.');
-      if (callback) callback();
-    }
-  };
-
   if (serverInstance && serverInstance.listening) {
     console.log('Closing HTTP server...');
     serverInstance.close(() => {
       console.log('HTTP server closed.');
-      closeInitialDb(() => process.exit(0));
+      // Add any other cleanup here (e.g., closing database connection pools if managed globally)
+      process.exit(0);
     });
   } else {
     console.log('HTTP server was not running or already closed.');
-    closeInitialDb(() => process.exit(0));
+    process.exit(0);
   }
 };
 
@@ -131,29 +113,23 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('uncaughtException', (error, origin) => {
   console.error(`UNCAUGHT EXCEPTION! Origin: ${origin}`, error);
   
-  const closeInitialDbAndExit = () => {
-    if (initialDbConnection && typeof initialDbConnection.close === 'function') {
-      initialDbConnection.close((dbErr) => {
-        if (dbErr) console.error('Error closing initial check DB on uncaught exception:', dbErr.message);
-        else console.log('Initial check DB closed on uncaught exception.');
-        process.exit(1); // Exit with error code
-      });
-    } else {
-      console.log('Initial check DB was not open or available to close during uncaught exception.');
-      process.exit(1);
-    }
-  };
-
-  // Attempt to gracefully close the server first, then the DB, then exit.
+  // Attempt to gracefully close the server first, then exit.
+  // This is a last resort; ideally, all errors should be caught.
   if (serverInstance && serverInstance.listening) {
+    console.log('Closing HTTP server due to uncaught exception...');
     serverInstance.close(() => {
       console.log('HTTP server closed due to uncaught exception.');
-      closeInitialDbAndExit();
+      process.exit(1); // Exit with error code
     });
   } else {
     console.log('HTTP server was not running or already closed during uncaught exception.');
-    closeInitialDbAndExit();
+    process.exit(1); // Exit with error code
   }
+  // Set a timeout to force exit if graceful shutdown hangs
+  setTimeout(() => {
+    console.error('Graceful shutdown timed out during uncaught exception. Forcing exit.');
+    process.exit(1);
+  }, 5000).unref(); // 5 seconds timeout
 });
 
 // Unhandled Rejection Handler
