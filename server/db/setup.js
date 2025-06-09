@@ -1,10 +1,19 @@
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
+import { fileURLToPath } from 'url';
+import path from 'path'; // Added for robust path resolution
+
+// Determine the directory of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Define the database file path relative to this script's directory
+const dbFilePath = path.join(__dirname, 'database.sqlite');
 
 // Function to open the database connection
 async function openDb() {
   return open({
-    filename: './db/database.sqlite',
+    filename: dbFilePath, // Use absolute path for robustness
     driver: sqlite3.Database
   });
 }
@@ -230,10 +239,23 @@ async function initializeDatabase() {
   console.log('Database initialization complete. Connection closed.');
 }
 
-// Run the initialization
-initializeDatabase().catch(err => {
-  console.error('Error initializing database:', err);
-  process.exit(1);
-});
-
+// Export openDb for controllers and other modules
 export { openDb };
+
+// Run initialization only if this script is executed directly by Node.js
+// process.argv[1] is the path of the script being run (absolute).
+// fileURLToPath(import.meta.url) is the path of the current module (absolute).
+// Node: In some environments or with some bundlers, process.argv[1] might not be reliable.
+// A more common check is `require.main === module` for CJS, or specific checks for ES modules.
+// For ES modules, comparing the executed script path with the module path is a good approach.
+
+const mainScriptPath = process.argv[1];
+const currentModulePath = fileURLToPath(import.meta.url);
+
+if (mainScriptPath === currentModulePath) {
+  console.log('INFO: db/setup.js is being run directly. Initializing database...');
+  initializeDatabase().catch(err => {
+    console.error('FATAL: Database initialization failed during direct execution.', err);
+    process.exit(1); // Exit if direct setup fails
+  });
+}
