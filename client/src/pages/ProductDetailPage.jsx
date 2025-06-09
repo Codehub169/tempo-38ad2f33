@@ -1,31 +1,30 @@
-import React, { useEffect, useState, useContext } from 'react';
-import { useParams, Link as RouterLink } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useParams, Link as RouterLink, useLocation } from 'react-router-dom';
 import { 
   Box, Container, Flex, Heading, Text, Image, Button, 
   SimpleGrid, VStack, HStack, Breadcrumb, BreadcrumbItem, 
   BreadcrumbLink, Spinner, Alert, AlertIcon, Tag, TagLabel, 
   TagLeftIcon, NumberInput, NumberInputField, NumberInputStepper, 
-  NumberIncrementStepper, NumberDecrementStepper, Icon 
+  NumberIncrementStepper, NumberDecrementStepper, Icon, useToast
 } from '@chakra-ui/react';
-import { FaShieldAlt, FaUndo, FaShippingFast, FaCheckCircle } from 'react-icons/fa'; // Example icons
-// import { getProductById } from '../services/api'; // Assuming api.js for actual data fetching
-import { CartContext } from '../contexts/CartContext';
-import ProductCard from '../components/ProductCard'; // For related products
+import { FaShieldAlt, FaUndo, FaShippingFast, FaCheckCircle, FaCartPlus } from 'react-icons/fa';
+// import { getProductById as fetchProductByIdApi } from '../services/api'; // Renamed to avoid conflict
+import { useCart } from '../contexts/CartContext';
+import ProductCard from '../components/ProductCard';
 
-// Mock API call for now
-const mockProducts = [
-  { id: '1', name: 'Refurbished iPhone 12 - 128GB, Black', price: 499.00, condition: 'Grade A: Excellent', conditionDesc: 'This device is in excellent cosmetic condition, showing minimal to no signs of use. Fully tested and 100% functional.', imperfections: ['Barely visible micro-scratch on the back panel (less than 2mm).', 'Original box not included. Comes with a new compatible charger.'], warranty: '6-Month Seller Warranty', category: 'Mobiles', imageUrl: 'https://via.placeholder.com/600x600.png?text=iPhone+12+Main', images: ['https://via.placeholder.com/600x600.png?text=iPhone+12+Main', 'https://via.placeholder.com/600x600.png?text=iPhone+12+Front', 'https://via.placeholder.com/600x600.png?text=iPhone+12+Back', 'https://via.placeholder.com/600x600.png?text=iPhone+12+Side'], description: 'Experience the power and elegance of the iPhone 12, meticulously refurbished to meet high quality standards. Features the A14 Bionic chip, an advanced dual-camera system, and a stunning Super Retina XDR display.', features: ['Super Retina XDR display', 'A14 Bionic chip', 'Advanced dual-camera system'] },
-  { id: '2', name: 'Refurbished Samsung 55" QLED TV', price: 650.00, condition: 'Grade B: Good', conditionDesc: 'Minor cosmetic blemishes, fully functional.', imperfections: ['Small scuff on stand.', 'Remote has slight wear.'], warranty: '1-Year Seller Warranty', category: 'TVs', imageUrl: 'https://via.placeholder.com/600x600.png?text=Samsung+TV+Main', images: ['https://via.placeholder.com/600x600.png?text=Samsung+TV+Main', 'https://via.placeholder.com/600x600.png?text=Samsung+TV+Angle'], description: 'A great QLED TV with vibrant colors.', features: ['55-inch QLED Panel', '4K Resolution', 'Smart TV Features'] },
-  // Add more mock products as needed for related items
-   { id: '7', name: 'Refurbished iPhone 11', price: 399.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=iPhone+11', category: 'Mobiles' },
-   { id: '8', name: 'Refurbished AirPods Pro', price: 159.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=AirPods+Pro', category: 'Accessories' },
-   { id: '9', name: 'Refurbished Samsung Galaxy S21', price: 450.00, condition: 'Grade B: Good', imageUrl: 'https://via.placeholder.com/300x200.png?text=Samsung+S21', category: 'Mobiles' },
+// Mock API data for now
+const mockProductsData = [
+  { id: '1', name: 'Refurbished iPhone 12 - 128GB, Black', price: 499.00, condition: 'Grade A: Excellent', conditionDesc: 'This device is in excellent cosmetic condition, showing minimal to no signs of use. Fully tested and 100% functional.', imperfections: ['Barely visible micro-scratch on the back panel (less than 2mm).', 'Original box not included. Comes with a new compatible charger.'], warranty: '6-Month Seller Warranty', category: 'Mobiles', imageUrl: 'https://via.placeholder.com/600x600.png?text=iPhone+12+Main', images: ['https://via.placeholder.com/600x600.png?text=iPhone+12+Main', 'https://via.placeholder.com/600x600.png?text=iPhone+12+Front', 'https://via.placeholder.com/600x600.png?text=iPhone+12+Back', 'https://via.placeholder.com/600x600.png?text=iPhone+12+Side'], description: 'Experience the power and elegance of the iPhone 12, meticulously refurbished to meet high quality standards. Features the A14 Bionic chip, an advanced dual-camera system, and a stunning Super Retina XDR display.', features: ['Super Retina XDR display', 'A14 Bionic chip', 'Advanced dual-camera system'], stock_quantity: 10 },
+  { id: '2', name: 'Refurbished Samsung 55" QLED TV', price: 650.00, condition: 'Grade B: Good', conditionDesc: 'Minor cosmetic blemishes, fully functional.', imperfections: ['Small scuff on stand.', 'Remote has slight wear.'], warranty: '1-Year Seller Warranty', category: 'TVs', imageUrl: 'https://via.placeholder.com/600x600.png?text=Samsung+TV+Main', images: ['https://via.placeholder.com/600x600.png?text=Samsung+TV+Main', 'https://via.placeholder.com/600x600.png?text=Samsung+TV+Angle'], description: 'A great QLED TV with vibrant colors.', features: ['55-inch QLED Panel', '4K Resolution', 'Smart TV Features'], stock_quantity: 5 },
+  { id: '7', name: 'Refurbished iPhone 11', price: 399.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=iPhone+11', category: 'Mobiles', stock_quantity: 15, images: ['https://via.placeholder.com/300x200.png?text=iPhone+11'] },
+  { id: '8', name: 'Refurbished AirPods Pro', price: 159.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=AirPods+Pro', category: 'Accessories', stock_quantity: 20, images: ['https://via.placeholder.com/300x200.png?text=AirPods+Pro'] },
+  { id: '9', name: 'Refurbished Samsung Galaxy S21', price: 450.00, condition: 'Grade B: Good', imageUrl: 'https://via.placeholder.com/300x200.png?text=Samsung+S21', category: 'Mobiles', stock_quantity: 0, images: ['https://via.placeholder.com/300x200.png?text=Samsung+S21'] }, // Out of stock example
 ];
 
-const getProductById = (id) => {
+const getMockProductById = (id) => {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
-      const product = mockProducts.find(p => p.id === id);
+      const product = mockProductsData.find(p => p.id === id);
       if (product) {
         resolve(product);
       } else {
@@ -37,24 +36,30 @@ const getProductById = (id) => {
 
 const ProductDetailPage = () => {
   const { id } = useParams();
+  const location = useLocation(); // To reset scroll on ID change
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedImage, setSelectedImage] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const { addToCart } = useContext(CartContext);
+  const { addToCart, getItemQuantity } = useCart();
+  const toast = useToast();
 
   useEffect(() => {
+    window.scrollTo(0, 0); // Scroll to top on component mount or id change
     const fetchProduct = async () => {
       try {
         setLoading(true);
-        const data = await getProductById(id);
+        setQuantity(1); // Reset quantity on new product load
+        // const data = await fetchProductByIdApi(id);
+        const data = await getMockProductById(id);
         setProduct(data);
-        setSelectedImage(data.images ? data.images[0] : data.imageUrl);
+        setSelectedImage(data.images && data.images.length > 0 ? data.images[0] : data.imageUrl);
         setError(null);
       } catch (err) {
         setError('Failed to fetch product details. Product may not exist or an error occurred.');
-        console.error(err);
+        console.error('Error fetching product:', err);
+        setProduct(null); // Ensure product is null on error
       }
       setLoading(false);
     };
@@ -63,36 +68,41 @@ const ProductDetailPage = () => {
 
   const handleAddToCart = () => {
     if (product) {
-      addToCart({ ...product, quantity });
-      // Optionally: Add toast notification for item added
+      addToCart({ ...product, imageUrl: product.imageUrl || product.images?.[0] }, quantity);
+      // Toast is handled by CartContext, but can add a specific one here if needed
+      // For example, confirming navigation or further actions.
     }
   };
 
-  if (loading) return <Flex justify="center" align="center" h="calc(100vh - 200px)"><Spinner size="xl" color="var(--primary-color)" /></Flex>;
-  if (error) return <Container py={10}><Alert status="error" borderRadius="md"><AlertIcon />{error}</Alert></Container>;
-  if (!product) return <Container py={10}><Text>Product not found.</Text></Container>;
+  const currentCartQuantity = product ? getItemQuantity(product.id) : 0;
+  const availableStock = product ? (product.stock_quantity || 0) - currentCartQuantity : 0;
+  const maxQuantity = Math.max(1, product?.stock_quantity ?? 10); // Default max if stock undefined
 
-  const relatedProducts = mockProducts.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
+  if (loading) return <Flex justify="center" align="center" h="calc(100vh - 200px)"><Spinner size="xl" color="var(--primary-color)" thickness="4px" label="Loading product details..." /></Flex>;
+  if (error) return <Container py={10} centerContent><Alert status="error" borderRadius="md"><AlertIcon />{error}</Alert><Button as={RouterLink} to="/" mt={4}>Go to Homepage</Button></Container>;
+  if (!product) return <Container py={10} centerContent><Text>Product not found.</Text><Button as={RouterLink} to="/" mt={4}>Go to Homepage</Button></Container>;
+
+  const relatedProducts = mockProductsData.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
 
   return (
     <Container maxW="container.lg" py={8}>
-      <Breadcrumb fontWeight="medium" fontSize="sm" mb={6}>
+      <Breadcrumb fontWeight="medium" fontSize="sm" mb={6} color="var(--text-light)">
         <BreadcrumbItem>
-          <BreadcrumbLink as={RouterLink} to="/">Home</BreadcrumbLink>
+          <BreadcrumbLink as={RouterLink} to="/" _hover={{ color: 'var(--primary-color)' }}>Home</BreadcrumbLink>
         </BreadcrumbItem>
         <BreadcrumbItem>
-          <BreadcrumbLink as={RouterLink} to={`/?category=${product.category}`}>{product.category}</BreadcrumbLink>
+          <BreadcrumbLink as={RouterLink} to={`/?category=${product.category}`} _hover={{ color: 'var(--primary-color)' }}>{product.category}</BreadcrumbLink>
         </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <BreadcrumbLink href="#">{product.name}</BreadcrumbLink>
+        <BreadcrumbItem isCurrentPage color="var(--text-dark)">
+          <BreadcrumbLink href="#" isTruncated maxW="300px">{product.name}</BreadcrumbLink>
         </BreadcrumbItem>
       </Breadcrumb>
 
-      <Flex direction={{ base: 'column', md: 'row' }} gap={10}>
+      <Flex direction={{ base: 'column', md: 'row' }} gap={{ base: 6, md: 10 }}>
         {/* Product Gallery */}
-        <VStack w={{ base: 'full', md: '55%' }} align="stretch">
-          <Box borderWidth="1px" borderColor="var(--border-color)" borderRadius="lg" overflow="hidden" p={2} bg="white" shadow="sm">
-            <Image src={selectedImage} alt={product.name} objectFit="contain" w="full" h={{ base: '300px', md: '450px' }} />
+        <VStack w={{ base: 'full', md: '55%' }} align="stretch" spacing={4}>
+          <Box borderWidth="1px" borderColor="var(--border-color)" borderRadius="lg" overflow="hidden" p={2} bg="white" shadow="sm" h={{ base: '320px', md: '450px' }} display="flex" alignItems="center" justifyContent="center">
+            <Image src={selectedImage} alt={product.name} objectFit="contain" w="full" h="full" />
           </Box>
           {product.images && product.images.length > 1 && (
             <HStack spacing={3} overflowX="auto" py={2}>
@@ -108,8 +118,9 @@ const ProductDetailPage = () => {
                   onClick={() => setSelectedImage(img)}
                   flexShrink={0}
                   _hover={{ borderColor: 'var(--primary-color)'}}
+                  aria-label={`View image ${index + 1}`}
                 >
-                  <Image src={img} alt={`Thumbnail ${index + 1}`} objectFit="cover" w="full" h="full" />
+                  <Image src={img} alt={`Thumbnail ${product.name} ${index + 1}`} objectFit="cover" w="full" h="full" />
                 </Box>
               ))}
             </HStack>
@@ -122,7 +133,7 @@ const ProductDetailPage = () => {
           <Text fontSize="3xl" fontWeight="bold" color="var(--primary-color)">${product.price.toFixed(2)}</Text>
           
           <Box bg="gray.50" p={4} borderRadius="md" borderWidth="1px" borderColor="var(--border-color)">
-            <Tag size="lg" variant="subtle" colorScheme="green" mb={2}>
+            <Tag size="lg" variant="subtle" colorScheme={product.condition.toLowerCase().includes('excellent') ? 'green' : product.condition.toLowerCase().includes('good') ? 'yellow' : 'orange'} mb={2}>
               <TagLeftIcon as={FaCheckCircle} />
               <TagLabel fontWeight="semibold">{product.condition}</TagLabel>
             </Tag>
@@ -130,7 +141,7 @@ const ProductDetailPage = () => {
             {product.imperfections && product.imperfections.length > 0 && (
               <Box>
                 <Text fontWeight="semibold" fontSize="sm" mb={1}>Specific Notes:</Text>
-                <VStack as="ul" align="stretch" spacing={1} pl={4} fontSize="sm">
+                <VStack as="ul" align="stretch" spacing={1} pl={4} fontSize="sm" listStyleType="disc">
                   {product.imperfections.map((note, i) => <Text as="li" key={i}>{note}</Text>)}
                 </VStack>
               </Box>
@@ -143,11 +154,20 @@ const ProductDetailPage = () => {
               <Text fontSize="sm" fontWeight="medium">{product.warranty}</Text>
             </HStack>
           )}
+           {product.stock_quantity === 0 && <Text color="red.500" fontWeight="bold">Out of Stock</Text>}
+           {product.stock_quantity > 0 && product.stock_quantity <= 5 && <Text color="orange.500" fontWeight="medium">Only {product.stock_quantity} left in stock!</Text>}
 
           <HStack>
             <Text fontWeight="medium">Quantity:</Text>
-            <NumberInput size="md" maxW="100px" defaultValue={1} min={1} max={10} value={quantity} onChange={(valueString) => setQuantity(parseInt(valueString))}>
-              <NumberInputField borderColor="var(--border-color)"/>
+            <NumberInput 
+              size="md" maxW="100px" 
+              defaultValue={1} min={1} max={Math.min(10, product.stock_quantity > 0 ? product.stock_quantity : 1)} // Limit to stock, or 1 if OOS, max 10
+              value={quantity} 
+              onChange={(_, valueAsNumber) => setQuantity(isNaN(valueAsNumber) ? 1 : valueAsNumber)}
+              isDisabled={product.stock_quantity === 0}
+              borderColor="var(--border-color)"
+            >
+              <NumberInputField aria-label="Quantity" />
               <NumberInputStepper>
                 <NumberIncrementStepper />
                 <NumberDecrementStepper />
@@ -161,10 +181,11 @@ const ProductDetailPage = () => {
             className="btn btn-accent" 
             onClick={handleAddToCart} 
             py={7}
-            leftIcon={<Icon as={FaShippingFast} />}
+            leftIcon={<Icon as={FaCartPlus} />}
             _hover={{ bg: 'green.600'}}
+            isDisabled={product.stock_quantity === 0 || quantity > availableStock}
           >
-            Add to Cart
+            {product.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
           </Button>
 
           <HStack spacing={4} justifyContent="center" wrap="wrap" mt={4}>
@@ -176,7 +197,7 @@ const ProductDetailPage = () => {
           {product.description && (
             <Box pt={6}>
               <Heading as="h3" size="md" fontFamily="var(--font-secondary)" mb={3}>Product Details</Heading>
-              <Text fontSize="sm" color="var(--text-light)" lineHeight="tall">{product.description}</Text>
+              <Text fontSize="sm" color="var(--text-light)" lineHeight="tall" whiteSpace="pre-wrap">{product.description}</Text>
               {product.features && product.features.length > 0 && (
                 <Box mt={4}>
                   <Heading as="h4" size="sm" fontFamily="var(--font-secondary)" mb={2}>Key Features:</Heading>
@@ -196,7 +217,7 @@ const ProductDetailPage = () => {
           <Heading as="h2" size="lg" fontFamily="var(--font-secondary)" mb={6}>You Might Also Like</Heading>
           <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={6}>
             {relatedProducts.map(relatedProd => (
-              <ProductCard key={relatedProd.id} product={relatedProd} />
+              <ProductCard key={relatedProd.id} product={{ ...relatedProd, image: relatedProd.imageUrl, conditionGrade: relatedProd.condition, stock: relatedProd.stock_quantity }} />
             ))}
           </SimpleGrid>
         </Box>

@@ -1,21 +1,21 @@
-import React, { useEffect, useState, useContext } from 'react';
-import { Box, Container, Flex, Heading, Text, SimpleGrid, VStack, Select, RangeSlider, RangeSliderTrack, RangeSliderFilledTrack, RangeSliderThumb, Button, Spinner, Alert, AlertIcon, Image, Link as ChakraLink } from '@chakra-ui/react';
+import React, { useEffect, useState } from 'react';
+import { Box, Container, Flex, Heading, Text, SimpleGrid, VStack, Select, RangeSlider, RangeSliderTrack, RangeSliderFilledTrack, RangeSliderThumb, Button, Spinner, Alert, AlertIcon } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
-// import { getProducts } from '../services/api'; // Assuming api.js will be created
-import { CartContext } from '../contexts/CartContext'; // To update cart count in header if needed
+// import { getProducts as fetchProductsApi } from '../services/api'; // Renamed to avoid conflict with mock
+import { useCart } from '../contexts/CartContext';
 
 // Mock API call for now
-const getProducts = () => {
+const getMockProducts = () => {
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve([
-        { id: '1', name: 'Refurbished iPhone 12', price: 499.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+iPhone+12', category: 'Mobiles' },
-        { id: '2', name: 'Refurbished Samsung 55" QLED TV', price: 650.00, condition: 'Grade B: Good', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+Samsung+TV', category: 'TVs' },
-        { id: '3', name: 'Refurbished MacBook Pro 13"', price: 899.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+MacBook+Pro', category: 'Laptops' },
-        { id: '4', name: 'Refurbished LG Double Door Fridge', price: 550.00, condition: 'Grade B: Good', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+Fridge', category: 'Fridges' },
-        { id: '5', name: 'Refurbished Split AC Unit 1.5 Ton', price: 320.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+AC+Unit', category: 'ACs' },
-        { id: '6', name: 'Refurbished Gaming Laptop XYZ', price: 750.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+Gaming+Laptop', category: 'Laptops' },
+        { id: '1', name: 'Refurbished iPhone 12', price: 499.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+iPhone+12', category: 'Mobiles', stock_quantity: 10 },
+        { id: '2', name: 'Refurbished Samsung 55" QLED TV', price: 650.00, condition: 'Grade B: Good', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+Samsung+TV', category: 'TVs', stock_quantity: 5 },
+        { id: '3', name: 'Refurbished MacBook Pro 13"', price: 899.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+MacBook+Pro', category: 'Laptops', stock_quantity: 8 },
+        { id: '4', name: 'Refurbished LG Double Door Fridge', price: 550.00, condition: 'Grade B: Good', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+Fridge', category: 'Fridges', stock_quantity: 3 },
+        { id: '5', name: 'Refurbished Split AC Unit 1.5 Ton', price: 320.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+AC+Unit', category: 'ACs', stock_quantity: 0 }, // Example of out of stock
+        { id: '6', name: 'Refurbished Gaming Laptop XYZ', price: 750.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+Gaming+Laptop', category: 'Laptops', stock_quantity: 12 },
       ]);
     }, 1000);
   });
@@ -29,20 +29,21 @@ const HomePage = () => {
   const [error, setError] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [conditionFilter, setConditionFilter] = useState('All');
-  const [priceRange, setPriceRange] = useState([50, 2000]);
-  const { cart } = useContext(CartContext); // Access cart to potentially display count or for other logic
+  const [priceRange, setPriceRange] = useState([0, 3000]); // Default to full range initially
+  const { cart } = useCart(); // Access cart to potentially display count or for other logic
 
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const data = await getProducts();
+        // const data = await fetchProductsApi(); // Future API call
+        const data = await getMockProducts();
         setProducts(data);
         setFilteredProducts(data);
         setError(null);
       } catch (err) {
         setError('Failed to fetch products. Please try again later.');
-        console.error(err);
+        console.error('Error fetching products:', err);
       }
       setLoading(false);
     };
@@ -57,8 +58,12 @@ const HomePage = () => {
     }
 
     if (conditionFilter !== 'All') {
-      // This is a simplified filter. In a real app, condition might be more structured.
-      tempProducts = tempProducts.filter(p => p.condition.includes(conditionFilter.split(' ')[1])); 
+      // Assumes conditionFilter is like "Grade A (Excellent)" and product.condition is "Grade X: ActualCondition"
+      // This extracts "Excellent" from "Grade A (Excellent)" to match "Grade A: Excellent"
+      const conditionKeyword = conditionFilter.match(/\(([^)]+)\)/)?.[1] || conditionFilter.split(' ')[1];
+      if (conditionKeyword) {
+        tempProducts = tempProducts.filter(p => p.condition.includes(conditionKeyword));
+      }
     }
 
     tempProducts = tempProducts.filter(p => p.price >= priceRange[0] && p.price <= priceRange[1]);
@@ -67,6 +72,7 @@ const HomePage = () => {
   }, [products, categoryFilter, conditionFilter, priceRange]);
 
   const categories = ['All', 'Mobiles', 'TVs', 'Laptops', 'Fridges', 'ACs', 'Appliances'];
+  // Ensure these values correspond to how filtering logic works
   const conditions = ['All', 'Grade A (Excellent)', 'Grade B (Good)', 'Grade C (Fair)'];
 
   return (
@@ -99,25 +105,25 @@ const HomePage = () => {
       <Container maxW="container.xl" py={5} id="products-section">
         <Flex direction={{ base: 'column', md: 'row' }} gap={6}>
           {/* Filters Sidebar */}
-          <Box w={{ base: 'full', md: '280px' }} p={5} bg="gray.50" borderRadius="lg" h="fit-content" shadow="sm">
+          <Box w={{ base: 'full', md: '280px' }} p={5} bg="gray.50" borderRadius="lg" h="fit-content" shadow="sm" position={{ md: 'sticky' }} top={{ md: '80px' }}>
             <VStack spacing={6} align="stretch">
               <Box>
                 <Heading as="h4" size="md" fontFamily="var(--font-secondary)" mb={3}>Categories</Heading>
-                <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} borderColor="var(--border-color)">
+                <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} borderColor="var(--border-color)" aria-label="Category Filter">
                   {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </Select>
               </Box>
               <Box>
                 <Heading as="h4" size="md" fontFamily="var(--font-secondary)" mb={3}>Condition</Heading>
-                <Select value={conditionFilter} onChange={(e) => setConditionFilter(e.target.value)} borderColor="var(--border-color)">
+                <Select value={conditionFilter} onChange={(e) => setConditionFilter(e.target.value)} borderColor="var(--border-color)" aria-label="Condition Filter">
                   {conditions.map(cond => <option key={cond} value={cond}>{cond}</option>)}
                 </Select>
               </Box>
               <Box>
                 <Heading as="h4" size="md" fontFamily="var(--font-secondary)" mb={3}>Price Range</Heading>
                 <RangeSlider 
-                  aria-label={['min', 'max']}
-                  defaultValue={[50, 2000]}
+                  aria-label={['min price', 'max price']}
+                  defaultValue={priceRange}
                   min={0}
                   max={3000} 
                   step={50}
@@ -134,21 +140,19 @@ const HomePage = () => {
                   <Text>${priceRange[1]}</Text>
                 </Flex>
               </Box>
-              {/* <Button colorScheme="blue" className="btn btn-primary" w="full">Apply Filters</Button> */} 
-              {/* Filtering is live, so apply button might not be needed, or can trigger a specific re-fetch */}
             </VStack>
           </Box>
 
           {/* Product Grid */}
           <Box flex={1}>
             <Heading as="h2" size="lg" fontFamily="var(--font-secondary)" mb={6}>Featured Products</Heading>
-            {loading && <Flex justify="center" align="center" h="300px"><Spinner size="xl" color="var(--primary-color)" /></Flex>}
+            {loading && <Flex justify="center" align="center" h="300px"><Spinner size="xl" color="var(--primary-color)" thickness="4px" label="Loading products..." /></Flex>}
             {error && <Alert status="error" borderRadius="md"><AlertIcon />{error}</Alert>}
-            {!loading && !error && (
+            {!loading && !error && products.length > 0 && (
               <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={6}>
                 {filteredProducts.length > 0 ? (
                   filteredProducts.map(product => (
-                    <ProductCard key={product.id} product={product} />
+                    <ProductCard key={product.id} product={{ ...product, image: product.imageUrl, conditionGrade: product.condition, stock: product.stock_quantity }} />
                   ))
                 ) : (
                   <Text>No products match your current filters.</Text>
