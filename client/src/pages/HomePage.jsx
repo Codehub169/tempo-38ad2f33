@@ -60,7 +60,9 @@ const HomePage = () => {
     if (conditionFilter !== 'All') {
       // Assumes conditionFilter is like "Grade A (Excellent)" and product.condition is "Grade X: ActualCondition"
       // This extracts "Excellent" from "Grade A (Excellent)" to match "Grade A: Excellent"
-      const conditionKeyword = conditionFilter.match(/\(([^)]+)\)/)?.[1] || conditionFilter.split(' ')[1];
+      const conditionKeywordMatch = conditionFilter.match(/\(([^)]+)\)/);
+      const conditionKeyword = conditionKeywordMatch ? conditionKeywordMatch[1] : conditionFilter.split(' ')[1];
+
       if (conditionKeyword) {
         tempProducts = tempProducts.filter(p => p.condition.includes(conditionKeyword));
       }
@@ -90,13 +92,13 @@ const HomePage = () => {
         mb={{ base: 8, md: 10 }}
       >
         <Container maxW="container.md">
-          <Heading as="h1" size={{ base: 'xl', md: '2xl' }} fontFamily="var(--font-secondary)" mb={4}>
+          <Heading as="h1" size={{ base: 'xl', md: '2xl' }} fontFamily="heading" mb={4}>
             Find Your Next Tech Treasure
           </Heading>
           <Text fontSize={{ base: 'lg', md: 'xl' }} mb={6} maxW="600px" mx="auto">
             Shop certified refurbished electronics and appliances with confidence. Quality guaranteed, prices you'll love.
           </Text>
-          <Button as={RouterLink} to="#products-section" colorScheme="green" size="lg" className="btn btn-primary" _hover={{ bg: 'green.600' }} px={8} py={6} borderRadius="full">
+          <Button as={RouterLink} to="#products-section" colorScheme="green" size="lg" /* className="btn btn-primary" */ _hover={{ bg: 'green.600' }} px={8} py={6} borderRadius="full">
             Shop All Products
           </Button>
         </Container>
@@ -108,19 +110,19 @@ const HomePage = () => {
           <Box w={{ base: 'full', md: '280px' }} p={5} bg="gray.50" borderRadius="lg" h="fit-content" shadow="sm" position={{ md: 'sticky' }} top={{ md: '80px' }}>
             <VStack spacing={6} align="stretch">
               <Box>
-                <Heading as="h4" size="md" fontFamily="var(--font-secondary)" mb={3}>Categories</Heading>
-                <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} borderColor="var(--border-color)" aria-label="Category Filter">
+                <Heading as="h4" size="md" fontFamily="heading" mb={3}>Categories</Heading>
+                <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} borderColor="brand.borderColor" aria-label="Category Filter">
                   {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </Select>
               </Box>
               <Box>
-                <Heading as="h4" size="md" fontFamily="var(--font-secondary)" mb={3}>Condition</Heading>
-                <Select value={conditionFilter} onChange={(e) => setConditionFilter(e.target.value)} borderColor="var(--border-color)" aria-label="Condition Filter">
+                <Heading as="h4" size="md" fontFamily="heading" mb={3}>Condition</Heading>
+                <Select value={conditionFilter} onChange={(e) => setConditionFilter(e.target.value)} borderColor="brand.borderColor" aria-label="Condition Filter">
                   {conditions.map(cond => <option key={cond} value={cond}>{cond}</option>)}
                 </Select>
               </Box>
               <Box>
-                <Heading as="h4" size="md" fontFamily="var(--font-secondary)" mb={3}>Price Range</Heading>
+                <Heading as="h4" size="md" fontFamily="heading" mb={3}>Price Range</Heading>
                 <RangeSlider 
                   aria-label={['min price', 'max price']}
                   defaultValue={priceRange}
@@ -128,14 +130,15 @@ const HomePage = () => {
                   max={3000} 
                   step={50}
                   onChangeEnd={(val) => setPriceRange(val)}
+                  colorScheme="blue" // Use colorScheme for RangeSlider track/thumb consistency
                 >
                   <RangeSliderTrack bg="blue.100">
-                    <RangeSliderFilledTrack bg="var(--primary-color)" />
+                    <RangeSliderFilledTrack /* bg="brand.primary" - Handled by colorScheme */ />
                   </RangeSliderTrack>
-                  <RangeSliderThumb boxSize={6} index={0} bg="var(--primary-color)" />
-                  <RangeSliderThumb boxSize={6} index={1} bg="var(--primary-color)" />
+                  <RangeSliderThumb boxSize={6} index={0} /* bg="brand.primary" - Handled by colorScheme */ />
+                  <RangeSliderThumb boxSize={6} index={1} /* bg="brand.primary" - Handled by colorScheme */ />
                 </RangeSlider>
-                <Flex justifyContent="space-between" mt={2} fontSize="sm" color="var(--text-light)">
+                <Flex justifyContent="space-between" mt={2} fontSize="sm" color="brand.textLight">
                   <Text>${priceRange[0]}</Text>
                   <Text>${priceRange[1]}</Text>
                 </Flex>
@@ -145,8 +148,8 @@ const HomePage = () => {
 
           {/* Product Grid */}
           <Box flex={1}>
-            <Heading as="h2" size="lg" fontFamily="var(--font-secondary)" mb={6}>Featured Products</Heading>
-            {loading && <Flex justify="center" align="center" h="300px"><Spinner size="xl" color="var(--primary-color)" thickness="4px" label="Loading products..." /></Flex>}
+            <Heading as="h2" size="lg" fontFamily="heading" mb={6}>Featured Products</Heading>
+            {loading && <Flex justify="center" align="center" h="300px"><Spinner size="xl" color="brand.primary" thickness="4px" label="Loading products..." /></Flex>}
             {error && <Alert status="error" borderRadius="md"><AlertIcon />{error}</Alert>}
             {!loading && !error && products.length > 0 && (
               <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={6}>
@@ -166,8 +169,8 @@ const HomePage = () => {
         </Flex>
 
          <Box textAlign="center" py={16} bg="gray.50" mt={10} borderRadius="lg">
-            <Heading as="h2" size="xl" fontFamily="var(--font-secondary)" mb={4}>More Products Coming Soon!</Heading>
-            <Text fontSize="lg" color="var(--text-light)">We are constantly updating our inventory with high-quality refurbished items.</Text>
+            <Heading as="h2" size="xl" fontFamily="heading" mb={4}>More Products Coming Soon!</Heading>
+            <Text fontSize="lg" color="brand.textLight">We are constantly updating our inventory with high-quality refurbished items.</Text>
         </Box>
       </Container>
     </Box>

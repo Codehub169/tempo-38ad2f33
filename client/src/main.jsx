@@ -4,12 +4,13 @@ import { ChakraProvider } from '@chakra-ui/react';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { CartProvider } from './contexts/CartContext'; // Assuming CartContext.jsx will be created
+import customTheme from './theme'; // Import the custom theme
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <ChakraProvider>
+      <ChakraProvider theme={customTheme}> {/* Apply the custom theme */}
         <CartProvider>
           <App />
         </CartProvider>

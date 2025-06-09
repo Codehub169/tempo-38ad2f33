@@ -5,7 +5,7 @@ import { FaFacebook, FaTwitter, FaInstagram, FaLinkedin } from 'react-icons/fa';
 
 const ListHeader = ({ children }) => {
   return (
-    <Text fontWeight={'600'} fontSize={'lg'} mb={2} fontFamily="brand.secondary" color="white">
+    <Text fontWeight={'600'} fontSize={'lg'} mb={2} fontFamily="heading" color="white">
       {children}
     </Text>
   );
@@ -27,6 +27,7 @@ const SocialButton = ({ children, label, href }) => {
       }}
       href={href}
       isExternal
+      aria-label={label}
     >
       <VisuallyHidden>{label}</VisuallyHidden>
       {children}
@@ -34,51 +35,68 @@ const SocialButton = ({ children, label, href }) => {
   );
 };
 
+const FooterLink = ({ to, children }) => (
+  <ChakraLink as={RouterLink} to={to} _hover={{ color: 'brand.primary', textDecoration: 'underline' }} fontSize="sm">
+    {children}
+  </ChakraLink>
+);
+
 const Footer = () => {
+  const currentYear = new Date().getFullYear();
+
+  // Placeholder links - in a real app, these would lead to actual pages or be dynamic
+  const quickLinks = [
+    { label: 'About Us', to: '/about' },
+    { label: 'Contact Us', to: '/contact' },
+    { label: 'FAQ', to: '/faq' },
+    { label: 'Return Policy', to: '/returns' },
+    { label: 'Terms of Service', to: '/terms' },
+  ];
+
+  const categoryLinks = [
+    { label: 'Mobiles', to: '/category/mobiles' },
+    { label: 'TVs', to: '/category/tvs' },
+    { label: 'Laptops', to: '/category/laptops' },
+    { label: 'Fridges & ACs', to: '/category/fridges-acs' }, // Combined for example
+    { label: 'Appliances', to: '/category/appliances' },
+  ];
+
+  const socialLinks = [
+    { label: 'Facebook', href: '#', icon: FaFacebook },
+    { label: 'Twitter', href: '#', icon: FaTwitter },
+    { label: 'Instagram', href: '#', icon: FaInstagram },
+    { label: 'LinkedIn', href: '#', icon: FaLinkedin },
+  ];
+
   return (
-    <Box bg="brand.textDark" color="brand.textLight" mt="auto">
+    <Box as="footer" bg="brand.textDark" color="brand.textLight" mt="auto">
       <Container as={Stack} maxW={'container.xl'} py={10}>
         <SimpleGrid columns={{ base: 1, sm: 2, md: 4 }} spacing={8}>
-          <Stack align={'flex-start'}>
+          <Stack align={'flex-start'} spacing={3}>
             <ListHeader>RefurbishMarket</ListHeader>
             <Text fontSize={'sm'}>
               Your trusted source for quality refurbished electronics and appliances at unbeatable prices.
             </Text>
           </Stack>
 
-          <Stack align={'flex-start'}>
+          <Stack align={'flex-start'} spacing={2}>
             <ListHeader>Quick Links</ListHeader>
-            <ChakraLink as={RouterLink} to="/about" _hover={{ color: 'brand.primary' }}>About Us</ChakraLink>
-            <ChakraLink as={RouterLink} to="/contact" _hover={{ color: 'brand.primary' }}>Contact Us</ChakraLink>
-            <ChakraLink as={RouterLink} to="/faq" _hover={{ color: 'brand.primary' }}>FAQ</ChakraLink>
-            <ChakraLink as={RouterLink} to="/returns" _hover={{ color: 'brand.primary' }}>Return Policy</ChakraLink>
-            <ChakraLink as={RouterLink} to="/terms" _hover={{ color: 'brand.primary' }}>Terms of Service</ChakraLink>
+            {quickLinks.map(link => <FooterLink key={link.label} to={link.to}>{link.label}</FooterLink>)}
           </Stack>
 
-          <Stack align={'flex-start'}>
+          <Stack align={'flex-start'} spacing={2}>
             <ListHeader>Categories</ListHeader>
-            <ChakraLink as={RouterLink} to="/category/mobiles" _hover={{ color: 'brand.primary' }}>Mobiles</ChakraLink>
-            <ChakraLink as={RouterLink} to="/category/tvs" _hover={{ color: 'brand.primary' }}>TVs</ChakraLink>
-            <ChakraLink as={RouterLink} to="/category/laptops" _hover={{ color: 'brand.primary' }}>Laptops</ChakraLink>
-            <ChakraLink as={RouterLink} to="/category/fridges" _hover={{ color: 'brand.primary' }}>Fridges & ACs</ChakraLink>
-            <ChakraLink as={RouterLink} to="/category/appliances" _hover={{ color: 'brand.primary' }}>Appliances</ChakraLink>
+            {categoryLinks.map(link => <FooterLink key={link.label} to={link.to}>{link.label}</FooterLink>)}
           </Stack>
 
-          <Stack align={'flex-start'}>
+          <Stack align={'flex-start'} spacing={3}>
             <ListHeader>Connect With Us</ListHeader>
             <Stack direction={'row'} spacing={4}>
-              <SocialButton label={'Facebook'} href={'#'}>
-                <Icon as={FaFacebook} w={5} h={5} />
-              </SocialButton>
-              <SocialButton label={'Twitter'} href={'#'}>
-                <Icon as={FaTwitter} w={5} h={5} />
-              </SocialButton>
-              <SocialButton label={'Instagram'} href={'#'}>
-                <Icon as={FaInstagram} w={5} h={5} />
-              </SocialButton>
-              <SocialButton label={'LinkedIn'} href={'#'}>
-                 <Icon as={FaLinkedin} w={5} h={5} />
-              </SocialButton>
+              {socialLinks.map(social => (
+                <SocialButton key={social.label} label={social.label} href={social.href}>
+                  <Icon as={social.icon} w={5} h={5} />
+                </SocialButton>
+              ))}
             </Stack>
           </Stack>
         </SimpleGrid>
@@ -86,7 +104,7 @@ const Footer = () => {
 
       <Box py={6} borderTopWidth={1} borderTopColor="gray.700">
         <Text pt={1} fontSize={'sm'} textAlign={'center'}>
-          &copy; {new Date().getFullYear()} RefurbishMarket. All Rights Reserved.
+          &copy; {currentYear} RefurbishMarket. All Rights Reserved.
         </Text>
       </Box>
     </Box>

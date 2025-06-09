@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link as RouterLink, useLocation } from 'react-router-dom';
+import { useParams, Link as RouterLink } from 'react-router-dom';
 import { 
   Box, Container, Flex, Heading, Text, Image, Button, 
   SimpleGrid, VStack, HStack, Breadcrumb, BreadcrumbItem, 
   BreadcrumbLink, Spinner, Alert, AlertIcon, Tag, TagLabel, 
   TagLeftIcon, NumberInput, NumberInputField, NumberInputStepper, 
-  NumberIncrementStepper, NumberDecrementStepper, Icon, useToast
+  NumberIncrementStepper, NumberDecrementStepper, Icon /* useToast removed as it's not used */
 } from '@chakra-ui/react';
 import { FaShieldAlt, FaUndo, FaShippingFast, FaCheckCircle, FaCartPlus } from 'react-icons/fa';
 // import { getProductById as fetchProductByIdApi } from '../services/api'; // Renamed to avoid conflict
@@ -36,14 +36,13 @@ const getMockProductById = (id) => {
 
 const ProductDetailPage = () => {
   const { id } = useParams();
-  const location = useLocation(); // To reset scroll on ID change
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedImage, setSelectedImage] = useState('');
   const [quantity, setQuantity] = useState(1);
   const { addToCart, getItemQuantity } = useCart();
-  const toast = useToast();
+  // const toast = useToast(); // Not used directly, CartContext handles toasts
 
   useEffect(() => {
     window.scrollTo(0, 0); // Scroll to top on component mount or id change
@@ -51,7 +50,7 @@ const ProductDetailPage = () => {
       try {
         setLoading(true);
         setQuantity(1); // Reset quantity on new product load
-        // const data = await fetchProductByIdApi(id);
+        // const data = await fetchProductByIdApi(id); // For real API
         const data = await getMockProductById(id);
         setProduct(data);
         setSelectedImage(data.images && data.images.length > 0 ? data.images[0] : data.imageUrl);
@@ -69,40 +68,40 @@ const ProductDetailPage = () => {
   const handleAddToCart = () => {
     if (product) {
       addToCart({ ...product, imageUrl: product.imageUrl || product.images?.[0] }, quantity);
-      // Toast is handled by CartContext, but can add a specific one here if needed
-      // For example, confirming navigation or further actions.
+      // Toast is handled by CartContext as per its implementation.
     }
   };
 
   const currentCartQuantity = product ? getItemQuantity(product.id) : 0;
-  const availableStock = product ? (product.stock_quantity || 0) - currentCartQuantity : 0;
-  const maxQuantity = Math.max(1, product?.stock_quantity ?? 10); // Default max if stock undefined
+  const availableStock = product ? Math.max(0, (product.stock_quantity || 0) - currentCartQuantity) : 0;
+  // max for NumberInput: if stock is 0, input is disabled, so max 1 is okay. Otherwise, min of 10 or actual stock.
+  const numberInputMax = product?.stock_quantity === 0 ? 1 : Math.min(product?.stock_quantity || 0, 10);
 
-  if (loading) return <Flex justify="center" align="center" h="calc(100vh - 200px)"><Spinner size="xl" color="var(--primary-color)" thickness="4px" label="Loading product details..." /></Flex>;
-  if (error) return <Container py={10} centerContent><Alert status="error" borderRadius="md"><AlertIcon />{error}</Alert><Button as={RouterLink} to="/" mt={4}>Go to Homepage</Button></Container>;
-  if (!product) return <Container py={10} centerContent><Text>Product not found.</Text><Button as={RouterLink} to="/" mt={4}>Go to Homepage</Button></Container>;
+  if (loading) return <Flex justify="center" align="center" h="calc(100vh - 200px)"><Spinner size="xl" color="brand.primary" thickness="4px" label="Loading product details..." /></Flex>;
+  if (error) return <Container py={10} centerContent><Alert status="error" borderRadius="md"><AlertIcon />{error}</Alert><Button as={RouterLink} to="/" mt={4} colorScheme="blue">Go to Homepage</Button></Container>;
+  if (!product) return <Container py={10} centerContent><Text>Product not found.</Text><Button as={RouterLink} to="/" mt={4} colorScheme="blue">Go to Homepage</Button></Container>;
 
   const relatedProducts = mockProductsData.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
 
   return (
     <Container maxW="container.lg" py={8}>
-      <Breadcrumb fontWeight="medium" fontSize="sm" mb={6} color="var(--text-light)">
+      <Breadcrumb fontWeight="medium" fontSize="sm" mb={6} color="brand.textLight">
         <BreadcrumbItem>
-          <BreadcrumbLink as={RouterLink} to="/" _hover={{ color: 'var(--primary-color)' }}>Home</BreadcrumbLink>
+          <BreadcrumbLink as={RouterLink} to="/" _hover={{ color: 'brand.primary' }}>Home</BreadcrumbLink>
         </BreadcrumbItem>
         <BreadcrumbItem>
-          <BreadcrumbLink as={RouterLink} to={`/?category=${product.category}`} _hover={{ color: 'var(--primary-color)' }}>{product.category}</BreadcrumbLink>
+          <BreadcrumbLink as={RouterLink} to={`/?category=${product.category}`} _hover={{ color: 'brand.primary' }}>{product.category}</BreadcrumbLink>
         </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage color="var(--text-dark)">
-          <BreadcrumbLink href="#" isTruncated maxW="300px">{product.name}</BreadcrumbLink>
+        <BreadcrumbItem isCurrentPage color="brand.textDark">
+          <BreadcrumbLink href="#" isTruncated maxW="300px" _hover={{ textDecoration: 'none', cursor: 'default' }}>{product.name}</BreadcrumbLink>
         </BreadcrumbItem>
       </Breadcrumb>
 
       <Flex direction={{ base: 'column', md: 'row' }} gap={{ base: 6, md: 10 }}>
         {/* Product Gallery */}
         <VStack w={{ base: 'full', md: '55%' }} align="stretch" spacing={4}>
-          <Box borderWidth="1px" borderColor="var(--border-color)" borderRadius="lg" overflow="hidden" p={2} bg="white" shadow="sm" h={{ base: '320px', md: '450px' }} display="flex" alignItems="center" justifyContent="center">
-            <Image src={selectedImage} alt={product.name} objectFit="contain" w="full" h="full" />
+          <Box borderWidth="1px" borderColor="brand.borderColor" borderRadius="lg" overflow="hidden" p={2} bg="white" shadow="sm" h={{ base: '320px', md: '450px' }} display="flex" alignItems="center" justifyContent="center">
+            <Image src={selectedImage || 'https://via.placeholder.com/600x400.png?text=No+Image+Available'} alt={product.name} objectFit="contain" w="full" h="full" />
           </Box>
           {product.images && product.images.length > 1 && (
             <HStack spacing={3} overflowX="auto" py={2}>
@@ -111,13 +110,13 @@ const ProductDetailPage = () => {
                   key={index} 
                   boxSize={{ base: '70px', md: '90px' }} 
                   borderWidth="2px" 
-                  borderColor={selectedImage === img ? 'var(--primary-color)' : 'var(--border-color)'} 
+                  borderColor={selectedImage === img ? 'brand.primary' : 'brand.borderColor'} 
                   borderRadius="md" 
                   overflow="hidden" 
                   cursor="pointer" 
                   onClick={() => setSelectedImage(img)}
                   flexShrink={0}
-                  _hover={{ borderColor: 'var(--primary-color)'}}
+                  _hover={{ borderColor: 'brand.primary'}}
                   aria-label={`View image ${index + 1}`}
                 >
                   <Image src={img} alt={`Thumbnail ${product.name} ${index + 1}`} objectFit="cover" w="full" h="full" />
@@ -129,15 +128,15 @@ const ProductDetailPage = () => {
 
         {/* Product Info */}
         <VStack w={{ base: 'full', md: '45%' }} align="stretch" spacing={5}>
-          <Heading as="h1" size="xl" fontFamily="var(--font-secondary)" color="var(--text-dark)">{product.name}</Heading>
-          <Text fontSize="3xl" fontWeight="bold" color="var(--primary-color)">${product.price.toFixed(2)}</Text>
+          <Heading as="h1" size="xl" fontFamily="heading" color="brand.textDark">{product.name}</Heading>
+          <Text fontSize="3xl" fontWeight="bold" color="brand.primary">${product.price.toFixed(2)}</Text>
           
-          <Box bg="gray.50" p={4} borderRadius="md" borderWidth="1px" borderColor="var(--border-color)">
+          <Box bg="gray.50" p={4} borderRadius="md" borderWidth="1px" borderColor="brand.borderColor">
             <Tag size="lg" variant="subtle" colorScheme={product.condition.toLowerCase().includes('excellent') ? 'green' : product.condition.toLowerCase().includes('good') ? 'yellow' : 'orange'} mb={2}>
               <TagLeftIcon as={FaCheckCircle} />
               <TagLabel fontWeight="semibold">{product.condition}</TagLabel>
             </Tag>
-            <Text fontSize="sm" color="var(--text-light)" mb={2}>{product.conditionDesc}</Text>
+            <Text fontSize="sm" color="brand.textLight" mb={2}>{product.conditionDesc || 'No condition description available.'}</Text>
             {product.imperfections && product.imperfections.length > 0 && (
               <Box>
                 <Text fontWeight="semibold" fontSize="sm" mb={1}>Specific Notes:</Text>
@@ -161,11 +160,12 @@ const ProductDetailPage = () => {
             <Text fontWeight="medium">Quantity:</Text>
             <NumberInput 
               size="md" maxW="100px" 
-              defaultValue={1} min={1} max={Math.min(10, product.stock_quantity > 0 ? product.stock_quantity : 1)} // Limit to stock, or 1 if OOS, max 10
+              defaultValue={1} min={1} 
+              max={numberInputMax}
               value={quantity} 
-              onChange={(_, valueAsNumber) => setQuantity(isNaN(valueAsNumber) ? 1 : valueAsNumber)}
+              onChange={(_, valueAsNumber) => setQuantity(isNaN(valueAsNumber) || valueAsNumber < 1 ? 1 : valueAsNumber)}
               isDisabled={product.stock_quantity === 0}
-              borderColor="var(--border-color)"
+              borderColor="brand.borderColor"
             >
               <NumberInputField aria-label="Quantity" />
               <NumberInputStepper>
@@ -178,14 +178,13 @@ const ProductDetailPage = () => {
           <Button 
             colorScheme="green" 
             size="lg" 
-            className="btn btn-accent" 
             onClick={handleAddToCart} 
             py={7}
             leftIcon={<Icon as={FaCartPlus} />}
             _hover={{ bg: 'green.600'}}
-            isDisabled={product.stock_quantity === 0 || quantity > availableStock}
+            isDisabled={product.stock_quantity === 0 || quantity <= 0 || quantity > availableStock}
           >
-            {product.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
+            {product.stock_quantity === 0 ? 'Out of Stock' : (quantity > availableStock ? 'Not enough stock' : 'Add to Cart')}
           </Button>
 
           <HStack spacing={4} justifyContent="center" wrap="wrap" mt={4}>
@@ -196,12 +195,12 @@ const ProductDetailPage = () => {
 
           {product.description && (
             <Box pt={6}>
-              <Heading as="h3" size="md" fontFamily="var(--font-secondary)" mb={3}>Product Details</Heading>
-              <Text fontSize="sm" color="var(--text-light)" lineHeight="tall" whiteSpace="pre-wrap">{product.description}</Text>
+              <Heading as="h3" size="md" fontFamily="heading" mb={3}>Product Details</Heading>
+              <Text fontSize="sm" color="brand.textLight" lineHeight="tall" whiteSpace="pre-wrap">{product.description}</Text>
               {product.features && product.features.length > 0 && (
                 <Box mt={4}>
-                  <Heading as="h4" size="sm" fontFamily="var(--font-secondary)" mb={2}>Key Features:</Heading>
-                  <VStack as="ul" align="stretch" spacing={1} pl={5} listStyleType="disc" fontSize="sm" color="var(--text-light)">
+                  <Heading as="h4" size="sm" fontFamily="heading" mb={2}>Key Features:</Heading>
+                  <VStack as="ul" align="stretch" spacing={1} pl={5} listStyleType="disc" fontSize="sm" color="brand.textLight">
                     {product.features.map((feature, i) => <Text as="li" key={i}>{feature}</Text>)}
                   </VStack>
                 </Box>
@@ -213,8 +212,8 @@ const ProductDetailPage = () => {
 
       {/* Related Products */}
       {relatedProducts.length > 0 && (
-        <Box mt={16} pt={8} borderTopWidth="1px" borderColor="var(--border-color)">
-          <Heading as="h2" size="lg" fontFamily="var(--font-secondary)" mb={6}>You Might Also Like</Heading>
+        <Box mt={16} pt={8} borderTopWidth="1px" borderColor="brand.borderColor">
+          <Heading as="h2" size="lg" fontFamily="heading" mb={6}>You Might Also Like</Heading>
           <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={6}>
             {relatedProducts.map(relatedProd => (
               <ProductCard key={relatedProd.id} product={{ ...relatedProd, image: relatedProd.imageUrl, conditionGrade: relatedProd.condition, stock: relatedProd.stock_quantity }} />

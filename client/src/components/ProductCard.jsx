@@ -1,54 +1,64 @@
 import React, { useState } from 'react';
-import { Box, Image, Text, Badge, Button, VStack, HStack, Icon, useToast, Tooltip, Heading } from '@chakra-ui/react';
+import { Box, Image, Text, Badge, Button, VStack, HStack, Icon, Heading } from '@chakra-ui/react'; // Removed useToast as it's handled by CartContext
 import { Link as RouterLink } from 'react-router-dom';
 import { FaShoppingCart, FaCheck } from 'react-icons/fa';
 import { useCart } from '../contexts/CartContext';
 
 const ProductCard = ({ product }) => {
-  // Destructure all expected props, providing defaults for safety if applicable, though parent should ensure they exist.
   const { id, name, image, price = 0, conditionGrade, stock } = product;
-  const { addToCart } = useCart();
-  const toast = useToast();
+  const { addToCart, cartItems } = useCart();
   const [isAdding, setIsAdding] = useState(false);
   const [added, setAdded] = useState(false);
 
   const handleAddToCart = (e) => {
-    e.preventDefault(); // Prevent link navigation when clicking button
+    e.preventDefault(); 
+    e.stopPropagation(); // Stop propagation to prevent RouterLink navigation when button is clicked
     setIsAdding(true);
+    
     // Simulate API call or async action
     setTimeout(() => {
-      // Pass the whole product object as it might be needed by the cart context
-      // Ensure product object contains all necessary fields for the cart (e.g., id, name, price, image, stock)
-      addToCart(product, 1);
-      toast({
-        title: `${name} added to cart.`,
-        status: 'success',
-        duration: 2000,
-        isClosable: true,
-        position: 'top-right',
-      });
+      addToCart(product, 1); // CartContext will handle the toast notification
       setIsAdding(false);
       setAdded(true);
       setTimeout(() => setAdded(false), 2000); // Reset added state after 2s
     }, 500);
   };
 
-  // More robust mapping for condition colors, handles variations in casing for 'Excellent', 'Good', 'Fair'
   const getConditionColorScheme = (grade) => {
     if (!grade) return 'gray';
     const lowerGrade = grade.toLowerCase();
     if (lowerGrade.includes('excellent') || lowerGrade.includes('grade a')) return 'green';
-    if (lowerGrade.includes('good') || lowerGrade.includes('grade b')) return 'orange';
+    if (lowerGrade.includes('good') || lowerGrade.includes('grade b')) return 'orange'; // Changed from yellow for better contrast/meaning
     if (lowerGrade.includes('fair') || lowerGrade.includes('grade c')) return 'red';
-    return 'gray'; // Default fallback
+    return 'gray'; 
   };
+
+  const itemInCart = cartItems.find(item => item.id === id);
+  const currentQuantityInCart = itemInCart ? itemInCart.quantity : 0;
+  const isOutOfStock = stock === 0;
+  const canAddToCart = !isOutOfStock && (stock === undefined || currentQuantityInCart < stock); // Handle undefined stock as infinite
+  const stockAvailable = stock === undefined ? Infinity : stock;
+
+  // Attempt to shorten condition grade display text
+  let displayCondition = conditionGrade;
+  if (conditionGrade) {
+    const parts = conditionGrade.split(':');
+    if (parts.length > 1 && parts[1].trim()) {
+        displayCondition = parts[1].trim();
+    } else {
+        const gradeParts = conditionGrade.split(' ');
+        if (gradeParts.length > 1 && gradeParts[1].trim()) {
+            displayCondition = gradeParts[1].trim();
+        }
+    }
+  }
 
   return (
     <Box
       as={RouterLink}
       to={`/product/${id}`}
       borderWidth="1px"
-      borderColor="var(--border-color)" // Using CSS variable, ensure Chakra theme is configured if this is intended, or use theme token like `brand.border`
+      borderColor="brand.borderColor"
       borderRadius="lg"
       overflow="hidden"
       bg="white"
@@ -59,65 +69,78 @@ const ProductCard = ({ product }) => {
       }}
       display="flex"
       flexDirection="column"
-      height="100%" // Ensures cards in a grid have same height
-      role="group" // For potential parent-driven hover states if needed
+      height="100%" 
+      role="group"
+      textDecoration="none" // Remove underline from link
     >
-      <Box height="200px" overflow="hidden" display="flex" alignItems="center" justifyContent="center" p={2} bg="gray.50" borderBottomWidth="1px" borderColor="var(--border-color)">
-        <Image src={image || 'https://via.placeholder.com/300x200.png?text=No+Image'} alt={name || 'Product Image'} objectFit="contain" maxH="100%" maxW="100%" transition="transform 0.2s ease-in-out" _groupHover={{ transform: 'scale(1.05)'}} />
+      <Box height="200px" overflow="hidden" display="flex" alignItems="center" justifyContent="center" p={2} bg="gray.50" borderBottomWidth="1px" borderColor="brand.borderColor">
+        <Image src={image || 'https://via.placeholder.com/300x200.png?text=No+Image'} alt={name || 'Product Image'} maxH="100%" maxW="100%" objectFit="contain" transition="transform 0.2s ease-in-out" _groupHover={{ transform: 'scale(1.05)' }}/>
       </Box>
 
-      <VStack p={4} spacing={3} align="stretch" flexGrow={1}> {/* flexGrow pushes button to bottom */}
-        <Heading as="h3" size="sm" noOfLines={2} fontFamily="var(--font-secondary)" color="var(--text-dark)" minHeight={{ base: "2.8em", md: "3em" }} title={name}>
+      <VStack p={4} spacing={3} align="stretch" flexGrow={1}>
+        <Heading as="h3" size="sm" fontWeight="medium" noOfLines={2} color="brand.textDark" title={name} minHeight="40px">
           {name || 'Unnamed Product'}
         </Heading>
-        
+
         <HStack justifyContent="space-between" alignItems="center">
-            {conditionGrade && (
-                 <Tooltip label={`Condition: ${conditionGrade}`} placement="top" hasArrow arrowSize={8}>
-                    <Badge 
-                        colorScheme={getConditionColorScheme(conditionGrade)} 
-                        variant="subtle"
-                        px={2}
-                        py={1} // Slightly increased padding for better readability
-                        borderRadius="md"
-                        textTransform="capitalize"
-                        fontSize="xs"
-                    >
-                        {conditionGrade}
-                    </Badge>
-                 </Tooltip>
-            )}
-            {stock !== undefined && stock <= 5 && stock > 0 && (
-                <Text fontSize="xs" color="red.500" fontWeight="medium">Only {stock} left!</Text>
-            )}
-             {stock === 0 && (
-                <Text fontSize="xs" color="red.500" fontWeight="bold">Out of Stock</Text>
-            )}
+          <Text fontSize="xl" fontWeight="bold" color="brand.primary">
+            ${typeof price === 'number' ? price.toFixed(2) : 'N/A'}
+          </Text>
+          {conditionGrade && (
+            <Badge 
+              colorScheme={getConditionColorScheme(conditionGrade)}
+              variant="subtle"
+              px={2}
+              py={0.5}
+              borderRadius="md"
+              fontSize="xs"
+              textTransform="capitalize"
+            >
+              {displayCondition}
+            </Badge>
+          )}
         </HStack>
 
-        <Text fontSize="xl" fontWeight="bold" color="var(--primary-color)" mt="auto"> {/* mt="auto" pushes price up if content above is short */}
-          ${price.toFixed(2)}
-        </Text>
+        {stock !== undefined && stock > 0 && stock <= 5 && (
+          <Text fontSize="xs" color="orange.500" fontWeight="medium">
+            Only {stock} left in stock!
+          </Text>
+        )}
+        {isOutOfStock && (
+            <Text fontSize="xs" color="red.500" fontWeight="bold">
+                Out of Stock
+            </Text>
+        )}
+      </VStack>
 
-        <Button
-          mt={2} // Ensure some space above button
-          colorScheme={added ? 'green' : 'blue'} // Chakra's color schemes
-          bg={added ? 'var(--accent-color)' : 'var(--primary-color)'} // Use CSS variables for specific colors if Chakra theme isn't fully customized for these names
-          color="white"
-          _hover={{ bg: added ? 'green.600' : 'blue.600' }} // Standard Chakra hover for color schemes
-          leftIcon={added ? <Icon as={FaCheck} /> : <Icon as={FaShoppingCart} />}
+      <HStack 
+        p={4} 
+        borderTopWidth="1px" 
+        borderColor="brand.borderColor" 
+        mt="auto" // Push to bottom
+      >
+        <Button 
+          variant={added ? "solid" : "outline"}
+          colorScheme={added ? "green" : "blue"}
+          size="sm" 
+          flexGrow={1}
           onClick={handleAddToCart}
           isLoading={isAdding}
           loadingText="Adding..."
-          isDisabled={isAdding || added || stock === 0}
+          isDisabled={isOutOfStock || !canAddToCart || added || currentQuantityInCart >= stockAvailable}
+          leftIcon={added ? <Icon as={FaCheck}/> : <Icon as={FaShoppingCart} />}
+          _hover={{ 
+            ...( (isOutOfStock || !canAddToCart || added || currentQuantityInCart >= stockAvailable) ? {} : { 
+                bg: added ? 'green.600' : 'blue.500', 
+                color: 'white', 
+                borderColor: added ? 'green.600' : 'blue.500' 
+            })
+          }}
           w="full"
-          fontFamily="var(--font-secondary)"
-          size="md" // Consistent button size
-          py={5} // Padding for button height
         >
-          {added ? 'Added!' : (stock === 0 ? 'Out of Stock' : 'Add to Cart')}
+          {added ? 'Added!' : isOutOfStock ? 'Out of Stock' : (!canAddToCart || currentQuantityInCart >= stockAvailable) ? 'Max in Cart' : 'Add to Cart'}
         </Button>
-      </VStack>
+      </HStack>
     </Box>
   );
 };

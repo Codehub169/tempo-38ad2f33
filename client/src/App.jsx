@@ -16,7 +16,7 @@ const SuspenseFallback = () => (
   <Flex justify="center" align="center" flexGrow={1} width="100%" minHeight="calc(100vh - 140px)"> {/* Adjusted minHeight for better centering considering Navbar/Footer approx height */}
     <Spinner 
       size="xl" 
-      color="var(--primary-color)" 
+      color="brand.primary" // Updated to use theme token
       thickness="4px" 
       label="Loading page..." 
       aria-label="Loading page content"
