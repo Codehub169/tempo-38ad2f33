@@ -13,6 +13,7 @@ const OrderConfirmationPage = lazy(() => import('./pages/OrderConfirmationPage')
 const LoginPage = lazy(() => import('./pages/LoginPage')); // Added
 const RegisterPage = lazy(() => import('./pages/RegisterPage')); // Added
 const CategoryPage = lazy(() => import('./pages/CategoryPage')); // Added
+const AddProductPage = lazy(() => import('./pages/AddProductPage')); // Added for sellers
 
 // Fallback component for Suspense
 const SuspenseFallback = () => (
@@ -40,6 +41,7 @@ function App() {
             <Route path="/login" element={<LoginPage />} /> {/* Added */}
             <Route path="/register" element={<RegisterPage />} /> {/* Added */}
             <Route path="/category/:categoryName" element={<CategoryPage />} /> {/* Added */}
+            <Route path="/add-product" element={<AddProductPage />} /> {/* Added for sellers */}
             <Route path="/product/:productId" element={<ProductDetailPage />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />

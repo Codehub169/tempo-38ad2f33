@@ -20,11 +20,11 @@ import {
   MenuList,
   MenuItem,
   MenuDivider,
-  Divider // Added Divider import
+  Divider
 } from '@chakra-ui/react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { HamburgerIcon, CloseIcon, SearchIcon } from '@chakra-ui/icons';
-import { FaMobileAlt, FaTv, FaSnowflake, FaWind, FaShoppingCart, FaUserCircle } from 'react-icons/fa';
+import { FaMobileAlt, FaTv, FaSnowflake, FaWind, FaShoppingCart, FaUserCircle, FaPlusCircle } from 'react-icons/fa';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -32,7 +32,7 @@ const NavLink = ({ href, children, icon, onClick }) => (
   <ChakraLink
     as={RouterLink}
     to={href}
-    onClick={onClick} // Ensure onClick is passed to close mobile menu
+    onClick={onClick} 
     px={3}
     py={2}
     rounded={'md'}
@@ -57,6 +57,7 @@ const Navbar = () => {
   const { cartItems } = useCart();
   const { isAuthenticated, user, logout, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation(); // Added as per diff, may be used for redirect logic elsewhere or future use
   const cartItemCount = cartItems.reduce((count, item) => count + item.quantity, 0);
 
   const navItems = [
@@ -68,7 +69,7 @@ const Navbar = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/'); // Navigate to home page after logout
+    navigate('/'); 
   };
 
   return (
@@ -125,7 +126,7 @@ const Navbar = () => {
               p={2} 
               aria-label={`View shopping cart, ${cartItemCount} item${cartItemCount !== 1 ? 's' : ''}`}
               _hover={{ color: 'brand.primary' }}
-              display="flex" // Ensures icon is centered if p is applied
+              display="flex" 
               alignItems="center"
             >
               <Icon as={FaShoppingCart} w={6} h={6} color="brand.textDark" _hover={{ color: 'inherit' }} aria-hidden="true" />
@@ -161,13 +162,16 @@ const Navbar = () => {
                     minW={0} 
                     _hover={{textDecoration: 'none'}}
                     aria-label="User menu"
-                    title={user.name || user.email} // Tooltip for user name/email
+                    title={user.name || user.email}
                   >
                     <Icon as={FaUserCircle} w={6} h={6} color="brand.textDark" />
                   </MenuButton>
                   <MenuList zIndex="popover">
-                    <MenuItem as={RouterLink} to="/profile">My Profile</MenuItem> {/* Add /profile route later */}
-                    <MenuItem as={RouterLink} to="/orders">My Orders</MenuItem> {/* Add /orders route later */}
+                    <MenuItem as={RouterLink} to="/profile">My Profile</MenuItem>
+                    <MenuItem as={RouterLink} to="/orders">My Orders</MenuItem>
+                    {user?.role === 'seller' && (
+                      <MenuItem as={RouterLink} to="/add-product" icon={<Icon as={FaPlusCircle} />}>Add Product</MenuItem>
+                    )}
                     <MenuDivider />
                     <MenuItem onClick={handleLogout} color="red.500">Logout</MenuItem>
                   </MenuList>
@@ -207,11 +211,13 @@ const Navbar = () => {
                   <Icon as={FaShoppingCart} mr={2} aria-hidden="true" /> My Cart
                   {cartItemCount > 0 && <Text as="span" ml={2} bg="brand.accent" color="white" borderRadius="full" px={2} fontSize="sm">{cartItemCount}</Text>}
               </ChakraLink>
-              <Divider borderColor="brand.borderColor" my={2} /> {/* Replaced MenuDivider with Divider */}
+              <Divider borderColor="brand.borderColor" my={2} />
               {!isLoading && isAuthenticated && user ? (
                 <>
+                  {user?.role === 'seller' && (
+                    <NavLink href="/add-product" icon={FaPlusCircle} onClick={onToggle}>Add New Product</NavLink>
+                  )}
                   <NavLink href="/profile" icon={FaUserCircle} onClick={onToggle}>My Profile</NavLink>
-                  {/* Using a Button styled as NavLink for logout to handle onClick logic cleanly */}
                   <Button 
                     onClick={() => { handleLogout(); onToggle(); }} 
                     colorScheme="red" 
