@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Box, Container, Heading, Text, Button, VStack, HStack, 
   FormControl, FormLabel, FormErrorMessage, Input, SimpleGrid, Divider, 
-  Alert, AlertIcon, Icon, Select, useToast
+  Alert, AlertIcon, Icon, Select, useToast, Image
 } from '@chakra-ui/react';
 import { FaShoppingCart, FaCreditCard, FaLock } from 'react-icons/fa';
 import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../contexts/AuthContext'; // Assuming user details might be pre-filled
 
 const CheckoutPage = () => {
   const { cartItems, getCartTotal, clearCart } = useCart();
+  const { user } = useAuth(); // Get authenticated user
   const navigate = useNavigate();
   const toast = useToast();
   
@@ -19,7 +21,7 @@ const CheckoutPage = () => {
     address: '',
     city: '',
     postalCode: '',
-    country: 'US', 
+    country: 'IN', // Default to India
     cardNumber: '',
     expiryDate: '',
     cvv: '',
@@ -31,7 +33,16 @@ const CheckoutPage = () => {
   const cartTotal = getCartTotal();
 
   useEffect(() => {
-    // Redirect to home if cart is empty and not in submission process
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        fullName: user.name || prev.fullName,
+        email: user.email || prev.email,
+      }));
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (cartItems.length === 0 && !loading) {
       toast({
         title: "Your cart is empty!",
@@ -65,12 +76,13 @@ const CheckoutPage = () => {
     if (!formData.city.trim()) errors.city = 'City is required.';
     if (!formData.postalCode.trim()) {
       errors.postalCode = 'Postal code is required.';
+    } else if (formData.country === 'IN' && !/^\d{6}$/.test(formData.postalCode)) {
+      errors.postalCode = 'Invalid Indian postal code (e.g., 110001).';
     } else if (formData.country === 'US' && !/^\d{5}(-\d{4})?$/.test(formData.postalCode)) {
       errors.postalCode = 'Invalid US postal code (e.g., 12345 or 12345-6789).';
-    } // Add more country-specific validations if needed
+    }
     if (!formData.country.trim()) errors.country = 'Country is required.';
     
-    // Mocked payment fields validation (basic presence and format check)
     if (!formData.cardNumber.trim()) {
       errors.cardNumber = 'Card number is required.';
     } else if (!/^\d{13,19}$/.test(formData.cardNumber.replace(/\s/g, ''))) {
@@ -82,11 +94,20 @@ const CheckoutPage = () => {
     } else if (!/^(0[1-9]|1[0-2])\/?([0-9]{2})$/.test(formData.expiryDate)) {
       errors.expiryDate = 'Invalid expiry date format (MM/YY or MMYY).';
     } else {
-      const [month, year] = formData.expiryDate.split(/\/?/);
-      const expiry = new Date(Number(`20${year}`), Number(month) -1 ); // month is 0-indexed
-      const currentMonth = new Date();
-      currentMonth.setDate(1); // Set to first day of current month for comparison
-      if (expiry < currentMonth) {
+      let monthStr, yearStr;
+      if (formData.expiryDate.includes('/')) {
+        [monthStr, yearStr] = formData.expiryDate.split('/');
+      } else {
+        monthStr = formData.expiryDate.substring(0, 2);
+        yearStr = formData.expiryDate.substring(2, 4);
+      }
+      const month = parseInt(monthStr, 10);
+      const year = parseInt(yearStr, 10);
+      const expiryDateObj = new Date(Number(`20${year}`), month, 1); // First day of the month *after* expiry month
+      const currentDate = new Date();
+      currentDate.setHours(0,0,0,0);
+
+      if (expiryDateObj <= currentDate) {
           errors.expiryDate = 'Card has expired.';
       }
     }
@@ -106,18 +127,19 @@ const CheckoutPage = () => {
     setSubmissionError('');
     if (!validateForm()) {
       setSubmissionError('Please correct the errors in the form.');
-      toast({ title: 'Validation Error', description: 'Please correct the highlighted errors.', status: 'error', duration: 3000, isClosable: true });
+      toast({ title: 'Validation Error', description: 'Please correct the highlighted errors.', status: 'error', duration: 3000, isClosable: true, position: "top" });
       return;
     }
     
     setLoading(true);
     try {
-      // In a real app: await placeOrderApi({ cartItems, formData, total: cartTotal });
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+      // Simulate API call to backend's createOrder endpoint
+      // In a real app: await createOrderApi({ cartItems, formData, total: cartTotal });
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
       
       const orderDetails = {
         orderId: `RM${Date.now().toString().slice(-6)}`,
-        items: cartItems,
+        items: cartItems.map(item => ({ ...item, image_url: item.image_url || item.imageUrl })), // Ensure image_url is passed
         total: cartTotal,
         shippingAddress: {
             fullName: formData.fullName,
@@ -132,16 +154,15 @@ const CheckoutPage = () => {
 
       clearCart(); 
       navigate('/order-confirmation', { state: { orderDetails } });
-      // setLoading(false) not strictly needed here as component unmounts upon navigation
     } catch (apiError) {
       console.error('Order placement error:', apiError);
-      setSubmissionError('There was an issue placing your order. Please try again or contact support.');
-      toast({ title: 'Order Failed', description: 'Could not place your order. Please try again.', status: 'error', duration: 5000, isClosable: true });
+      const message = apiError.response?.data?.message || 'There was an issue placing your order. Please try again or contact support.';
+      setSubmissionError(message);
+      toast({ title: 'Order Failed', description: message, status: 'error', duration: 5000, isClosable: true, position: "top" });
       setLoading(false);
     }
   };
   
-  // This check is primarily for initial render before useEffect runs, or if loading changes cartItems length to 0
   if (cartItems.length === 0 && !loading) return null;
 
   return (
@@ -151,7 +172,6 @@ const CheckoutPage = () => {
       </Heading>
 
       <Flex direction={{ base: 'column-reverse', md: 'row' }} gap={10}>
-        {/* Shipping & Payment Form */}
         <Box flex={{base: 1, md: 2}} bg="white" p={{base: 4, md: 8}} borderRadius="lg" shadow="sm" borderWidth="1px" borderColor="brand.borderColor">
           <form onSubmit={handleSubmit} noValidate>
             <VStack spacing={6} align="stretch">
@@ -176,22 +196,22 @@ const CheckoutPage = () => {
               <SimpleGrid columns={{base: 1, sm: 2}} spacing={4}>
                 <FormControl isRequired isInvalid={!!formErrors.city}>
                   <FormLabel htmlFor="city">City</FormLabel>
-                  <Input id="city" name="city" value={formData.city} onChange={handleChange} placeholder="New York" borderColor="brand.borderColor" autoComplete="address-level2"/>
+                  <Input id="city" name="city" value={formData.city} onChange={handleChange} placeholder="Mumbai" borderColor="brand.borderColor" autoComplete="address-level2"/>
                   <FormErrorMessage>{formErrors.city}</FormErrorMessage>
                 </FormControl>
                 <FormControl isRequired isInvalid={!!formErrors.postalCode}>
                   <FormLabel htmlFor="postalCode">Postal Code</FormLabel>
-                  <Input id="postalCode" name="postalCode" value={formData.postalCode} onChange={handleChange} placeholder="10001" borderColor="brand.borderColor" autoComplete="postal-code"/>
+                  <Input id="postalCode" name="postalCode" value={formData.postalCode} onChange={handleChange} placeholder="400001" borderColor="brand.borderColor" autoComplete="postal-code"/>
                   <FormErrorMessage>{formErrors.postalCode}</FormErrorMessage>
                 </FormControl>
               </SimpleGrid>
               <FormControl isRequired isInvalid={!!formErrors.country}>
                 <FormLabel htmlFor="country">Country</FormLabel>
                 <Select id="country" name="country" value={formData.country} onChange={handleChange} borderColor="brand.borderColor" autoComplete="country-name">
+                    <option value="IN">India</option>
                     <option value="US">United States</option>
                     <option value="CA">Canada</option>
                     <option value="GB">United Kingdom</option>
-                    {/* Add more countries as needed */}
                 </Select>
                 <FormErrorMessage>{formErrors.country}</FormErrorMessage>
               </FormControl>
@@ -204,12 +224,12 @@ const CheckoutPage = () => {
               <Text fontSize="sm" color="brand.textLight" mb={4}>Payment processing is mocked. No real card details are stored or processed.</Text>
               <FormControl isRequired isInvalid={!!formErrors.cardNumber}>
                 <FormLabel htmlFor="cardNumber">Card Number</FormLabel>
-                <Input id="cardNumber" name="cardNumber" value={formData.cardNumber} onChange={handleChange} placeholder="•••• •••• •••• ••••" borderColor="brand.borderColor" inputMode="numeric" autoComplete="cc-number"/>
+                <Input id="cardNumber" name="cardNumber" value={formData.cardNumber} onChange={handleChange} placeholder="	u2022	u2022	u2022	u2022 	u2022	u2022	u2022	u2022 	u2022	u2022	u2022	u2022 	u2022	u2022	u2022	u2022" borderColor="brand.borderColor" inputMode="numeric" autoComplete="cc-number"/>
                 <FormErrorMessage>{formErrors.cardNumber}</FormErrorMessage>
               </FormControl>
               <SimpleGrid columns={2} spacing={4}>
                 <FormControl isRequired isInvalid={!!formErrors.expiryDate}>
-                  <FormLabel htmlFor="expiryDate">Expiry Date</FormLabel>
+                  <FormLabel htmlFor="expiryDate">Expiry Date (MM/YY)</FormLabel>
                   <Input id="expiryDate" name="expiryDate" value={formData.expiryDate} onChange={handleChange} placeholder="MM/YY" borderColor="brand.borderColor" inputMode="numeric" autoComplete="cc-exp"/>
                   <FormErrorMessage>{formErrors.expiryDate}</FormErrorMessage>
                 </FormControl>
@@ -231,13 +251,12 @@ const CheckoutPage = () => {
                 mt={4} py={7}
                  _hover={{ bg: 'green.600'}}
               >
-                Place Order & Pay ${cartTotal.toFixed(2)}
+                Place Order & Pay 	u20b9{cartTotal.toLocaleString('en-IN')}
               </Button>
             </VStack>
           </form>
         </Box>
 
-        {/* Order Summary */}
         <Box flex={1} bg="gray.50" p={{base:4, md:6}} borderRadius="lg" h="fit-content" shadow="sm" borderWidth="1px" borderColor="brand.borderColor" position={{ md: 'sticky' }} top={{ md: '80px' }}>
           <Heading as="h3" size="lg" fontFamily="heading" mb={6} display="flex" alignItems="center" color="brand.textDark">
             <Icon as={FaShoppingCart} mr={2} color="brand.primary" /> Order Summary
@@ -247,14 +266,14 @@ const CheckoutPage = () => {
               <HStack key={item.id} justify="space-between" py={2}>
                 <HStack spacing={3} alignItems="flex-start" flex={1} minWidth={0}>
                   <Box boxSize="50px" bg="white" borderRadius="md" borderWidth="1px" borderColor="brand.borderColor" p="2px" flexShrink={0}>
-                     <Image src={item.imageUrl || 'https://via.placeholder.com/50x50.png?text=Item'} alt={item.name} style={{width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit'}}/>
+                     <Image src={item.image_url || 'https://via.placeholder.com/50x50.png?text=Item'} alt={item.name} w="full" h="full" objectFit="cover" borderRadius="md"/>
                   </Box>
                   <Box flex={1} minWidth={0}>
                     <Text fontWeight="medium" fontSize="sm" noOfLines={2} color="brand.textDark" title={item.name}>{item.name}</Text>
                     <Text fontSize="xs" color="brand.textLight">Qty: {item.quantity}</Text>
                   </Box>
                 </HStack>
-                <Text fontWeight="medium" fontSize="sm" color="brand.textDark" whiteSpace="nowrap">${(item.price * item.quantity).toFixed(2)}</Text>
+                <Text fontWeight="medium" fontSize="sm" color="brand.textDark" whiteSpace="nowrap">	u20b9{(item.price * item.quantity).toLocaleString('en-IN')}</Text>
               </HStack>
             ))}
           </VStack>
@@ -262,7 +281,7 @@ const CheckoutPage = () => {
           <VStack spacing={2} align="stretch">
             <Flex justify="space-between">
               <Text color="brand.textLight">Subtotal</Text>
-              <Text fontWeight="medium" color="brand.textDark">${cartTotal.toFixed(2)}</Text>
+              <Text fontWeight="medium" color="brand.textDark">	u20b9{cartTotal.toLocaleString('en-IN')}</Text>
             </Flex>
             <Flex justify="space-between">
               <Text color="brand.textLight">Shipping</Text>
@@ -271,7 +290,7 @@ const CheckoutPage = () => {
             <Divider my={2} borderColor="gray.300" />
             <Flex justify="space-between" fontWeight="bold" fontSize="lg">
               <Text color="brand.textDark">Total</Text>
-              <Text color="brand.primary">${cartTotal.toFixed(2)}</Text>
+              <Text color="brand.primary">	u20b9{cartTotal.toLocaleString('en-IN')}</Text>
             </Flex>
           </VStack>
           <Text fontSize="xs" color="brand.textLight" mt={4} textAlign="center">

@@ -2,70 +2,60 @@ import React, { useEffect, useState } from 'react';
 import { Box, Container, Flex, Heading, Text, SimpleGrid, VStack, Select, RangeSlider, RangeSliderTrack, RangeSliderFilledTrack, RangeSliderThumb, Button, Spinner, Alert, AlertIcon } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
-// import { getProducts as fetchProductsApi } from '../services/api'; // Renamed to avoid conflict with mock
-import { useCart } from '../contexts/CartContext';
-
-// Mock API call for now
-const getMockProducts = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve([
-        { id: '1', name: 'Refurbished iPhone 12', price: 499.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+iPhone+12', category: 'Mobiles', stock_quantity: 10 },
-        { id: '2', name: 'Refurbished Samsung 55" QLED TV', price: 650.00, condition: 'Grade B: Good', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+Samsung+TV', category: 'TVs', stock_quantity: 5 },
-        { id: '3', name: 'Refurbished MacBook Pro 13"', price: 899.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+MacBook+Pro', category: 'Laptops', stock_quantity: 8 },
-        { id: '4', name: 'Refurbished LG Double Door Fridge', price: 550.00, condition: 'Grade B: Good', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+Fridge', category: 'Fridges', stock_quantity: 3 },
-        { id: '5', name: 'Refurbished Split AC Unit 1.5 Ton', price: 320.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+AC+Unit', category: 'ACs', stock_quantity: 0 }, // Example of out of stock
-        { id: '6', name: 'Refurbished Gaming Laptop XYZ', price: 750.00, condition: 'Grade A: Excellent', imageUrl: 'https://via.placeholder.com/300x200.png?text=Refurbished+Gaming+Laptop', category: 'Laptops', stock_quantity: 12 },
-      ]);
-    }, 1000);
-  });
-};
-
+import { getProducts as fetchProductsApi, getCategories as fetchCategoriesApi } from '../services/api';
 
 const HomePage = () => {
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [categories, setCategories] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [conditionFilter, setConditionFilter] = useState('All');
-  const [priceRange, setPriceRange] = useState([0, 3000]); // Default to full range initially
-  const { cart } = useCart(); // Access cart to potentially display count or for other logic
+  // Adjusted for INR, max price can be dynamic based on products, using 150000 as a general max for slider
+  const [priceRange, setPriceRange] = useState([0, 150000]); 
+  const [sliderMax, setSliderMax] = useState(150000);
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    const loadData = async () => {
       try {
         setLoading(true);
-        // const data = await fetchProductsApi(); // Future API call
-        const data = await getMockProducts();
-        setProducts(data);
-        setFilteredProducts(data);
+        const [productsResponse, categoriesResponse] = await Promise.all([
+          fetchProductsApi({ limit: 50 }), // Fetch a larger initial set for client-side filtering or rely on backend for all filters
+          fetchCategoriesApi()
+        ]);
+        
+        setProducts(productsResponse.data || []);
+        setFilteredProducts(productsResponse.data || []);
+        setCategories([{ id: 'all', name: 'All' }, ...(categoriesResponse || [])]);
+        
+        // Dynamically set slider max based on fetched products
+        if (productsResponse.data && productsResponse.data.length > 0) {
+          const maxPrice = productsResponse.data.reduce((max, p) => (p.price > max ? p.price : max), 0);
+          const newSliderMax = Math.ceil(maxPrice / 10000) * 10000 + 10000; // Round up to next 10k and add buffer
+          setSliderMax(newSliderMax > 0 ? newSliderMax : 150000);
+          setPriceRange([0, newSliderMax > 0 ? newSliderMax : 150000]);
+        }
         setError(null);
       } catch (err) {
-        setError('Failed to fetch products. Please try again later.');
-        console.error('Error fetching products:', err);
+        setError('Failed to fetch data. Please try again later.');
+        console.error('Error fetching data:', err);
       }
       setLoading(false);
     };
-    fetchProducts();
+    loadData();
   }, []);
 
   useEffect(() => {
     let tempProducts = [...products];
 
     if (categoryFilter !== 'All') {
-      tempProducts = tempProducts.filter(p => p.category === categoryFilter);
+      tempProducts = tempProducts.filter(p => p.category_name === categoryFilter);
     }
 
     if (conditionFilter !== 'All') {
-      // Assumes conditionFilter is like "Grade A (Excellent)" and product.condition is "Grade X: ActualCondition"
-      // This extracts "Excellent" from "Grade A (Excellent)" to match "Grade A: Excellent"
-      const conditionKeywordMatch = conditionFilter.match(/\(([^)]+)\)/);
-      const conditionKeyword = conditionKeywordMatch ? conditionKeywordMatch[1] : conditionFilter.split(' ')[1];
-
-      if (conditionKeyword) {
-        tempProducts = tempProducts.filter(p => p.condition.includes(conditionKeyword));
-      }
+      // Assuming conditionFilter is like "Excellent", "Good", "Fair"
+      tempProducts = tempProducts.filter(p => p.condition === conditionFilter);
     }
 
     tempProducts = tempProducts.filter(p => p.price >= priceRange[0] && p.price <= priceRange[1]);
@@ -73,13 +63,10 @@ const HomePage = () => {
     setFilteredProducts(tempProducts);
   }, [products, categoryFilter, conditionFilter, priceRange]);
 
-  const categories = ['All', 'Mobiles', 'TVs', 'Laptops', 'Fridges', 'ACs', 'Appliances'];
-  // Ensure these values correspond to how filtering logic works
-  const conditions = ['All', 'Grade A (Excellent)', 'Grade B (Good)', 'Grade C (Fair)'];
+  const conditionOptions = ['All', 'Excellent', 'Good', 'Fair'];
 
   return (
     <Box>
-      {/* Hero Section */}
       <Box 
         bgImage="linear-gradient(to right, rgba(0, 123, 255, 0.8), rgba(0, 80, 180, 0.8)), url('https://via.placeholder.com/1200x400.png?text=Refurbished+Electronics+Banner')"
         bgSize="cover"
@@ -98,7 +85,7 @@ const HomePage = () => {
           <Text fontSize={{ base: 'lg', md: 'xl' }} mb={6} maxW="600px" mx="auto">
             Shop certified refurbished electronics and appliances with confidence. Quality guaranteed, prices you'll love.
           </Text>
-          <Button as={RouterLink} to="#products-section" colorScheme="green" size="lg" /* className="btn btn-primary" */ _hover={{ bg: 'green.600' }} px={8} py={6} borderRadius="full">
+          <Button as={RouterLink} to="#products-section" colorScheme="green" size="lg" _hover={{ bg: 'green.600' }} px={8} py={6} borderRadius="full">
             Shop All Products
           </Button>
         </Container>
@@ -106,47 +93,45 @@ const HomePage = () => {
 
       <Container maxW="container.xl" py={5} id="products-section">
         <Flex direction={{ base: 'column', md: 'row' }} gap={6}>
-          {/* Filters Sidebar */}
           <Box w={{ base: 'full', md: '280px' }} p={5} bg="gray.50" borderRadius="lg" h="fit-content" shadow="sm" position={{ md: 'sticky' }} top={{ md: '80px' }}>
             <VStack spacing={6} align="stretch">
               <Box>
                 <Heading as="h4" size="md" fontFamily="heading" mb={3}>Categories</Heading>
                 <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} borderColor="brand.borderColor" aria-label="Category Filter">
-                  {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  {categories.map(cat => <option key={cat.id || cat.name} value={cat.name}>{cat.name}</option>)}
                 </Select>
               </Box>
               <Box>
                 <Heading as="h4" size="md" fontFamily="heading" mb={3}>Condition</Heading>
                 <Select value={conditionFilter} onChange={(e) => setConditionFilter(e.target.value)} borderColor="brand.borderColor" aria-label="Condition Filter">
-                  {conditions.map(cond => <option key={cond} value={cond}>{cond}</option>)}
+                  {conditionOptions.map(cond => <option key={cond} value={cond}>{cond}</option>)}
                 </Select>
               </Box>
               <Box>
                 <Heading as="h4" size="md" fontFamily="heading" mb={3}>Price Range</Heading>
                 <RangeSlider 
                   aria-label={['min price', 'max price']}
-                  defaultValue={priceRange}
+                  value={priceRange} // Controlled component
                   min={0}
-                  max={3000} 
-                  step={50}
-                  onChangeEnd={(val) => setPriceRange(val)}
-                  colorScheme="blue" // Use colorScheme for RangeSlider track/thumb consistency
+                  max={sliderMax} 
+                  step={1000} // Adjusted step for INR
+                  onChange={(val) => setPriceRange(val)} // Use onChange for immediate feedback if needed, or onChangeEnd
+                  colorScheme="blue"
                 >
                   <RangeSliderTrack bg="blue.100">
-                    <RangeSliderFilledTrack /* bg="brand.primary" - Handled by colorScheme */ />
+                    <RangeSliderFilledTrack />
                   </RangeSliderTrack>
-                  <RangeSliderThumb boxSize={6} index={0} /* bg="brand.primary" - Handled by colorScheme */ />
-                  <RangeSliderThumb boxSize={6} index={1} /* bg="brand.primary" - Handled by colorScheme */ />
+                  <RangeSliderThumb boxSize={6} index={0} />
+                  <RangeSliderThumb boxSize={6} index={1} />
                 </RangeSlider>
                 <Flex justifyContent="space-between" mt={2} fontSize="sm" color="brand.textLight">
-                  <Text>${priceRange[0]}</Text>
-                  <Text>${priceRange[1]}</Text>
+                  <Text>₹{priceRange[0].toLocaleString('en-IN')}</Text>
+                  <Text>₹{priceRange[1].toLocaleString('en-IN')}</Text>
                 </Flex>
               </Box>
             </VStack>
           </Box>
 
-          {/* Product Grid */}
           <Box flex={1}>
             <Heading as="h2" size="lg" fontFamily="heading" mb={6}>Featured Products</Heading>
             {loading && <Flex justify="center" align="center" h="300px"><Spinner size="xl" color="brand.primary" thickness="4px" label="Loading products..." /></Flex>}
@@ -155,7 +140,7 @@ const HomePage = () => {
               <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={6}>
                 {filteredProducts.length > 0 ? (
                   filteredProducts.map(product => (
-                    <ProductCard key={product.id} product={{ ...product, image: product.imageUrl, conditionGrade: product.condition, stock: product.stock_quantity }} />
+                    <ProductCard key={product.id} product={product} />
                   ))
                 ) : (
                   <Text>No products match your current filters.</Text>

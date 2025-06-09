@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api'; // Use environment variable or default
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -9,13 +9,29 @@ const apiClient = axios.create({
   },
 });
 
-// Interceptor for API responses (optional, for global error handling or logging)
+// Request interceptor to add token to headers
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle errors globally if needed
     console.error('API Error:', error.response || error.message || error);
-    // You could potentially redirect to an error page or show a global notification
+    if (error.response && error.response.status === 401) {
+      // Handle unauthorized errors, e.g., redirect to login or clear token
+      // This is often handled more granularly by AuthContext or specific components
+      // localStorage.removeItem('authToken');
+      // localStorage.removeItem('authUser');
+      // window.location.href = '/login'; // Or use react-router navigate if available here
+      console.warn('API returned 401 Unauthorized. Token might be invalid or expired.');
+    }
     return Promise.reject(error);
   }
 );
@@ -23,19 +39,21 @@ apiClient.interceptors.response.use(
 // Product endpoints
 export const getProducts = async (filters = {}) => {
   try {
-    const { category, condition, price_min, price_max, search } = filters;
+    const { category, condition, price_min, price_max, search, limit, page } = filters;
     const params = new URLSearchParams();
-    if (category && category.toLowerCase() !== 'all') params.append('category', category);
+    if (category && String(category).toLowerCase() !== 'all') params.append('category', category);
     if (condition) params.append('condition', condition);
-    if (price_min) params.append('price_min', price_min);
-    if (price_max) params.append('price_max', price_max);
+    if (price_min !== undefined) params.append('price_min', price_min);
+    if (price_max !== undefined) params.append('price_max', price_max);
     if (search) params.append('search', search);
+    if (limit) params.append('limit', limit);
+    if (page) params.append('page', page);
 
     const response = await apiClient.get(`/products?${params.toString()}`);
-    return response.data;
+    return response.data; // Assuming backend returns { data: [], pagination: {} }
   } catch (error) {
     console.error('Error fetching products:', error);
-    throw error; // Re-throw to be caught by the calling component
+    throw error;
   }
 };
 
@@ -70,17 +88,35 @@ export const getOrderById = async (id) => {
   }
 };
 
-// Mock function for categories, if not fetched from backend
+// Auth endpoints
+export const registerUser = async (userData) => {
+  try {
+    const response = await apiClient.post('/auth/register', userData);
+    return response.data;
+  } catch (error) {
+    console.error('Error registering user:', error);
+    throw error;
+  }
+};
+
+export const loginUser = async (credentials) => {
+  try {
+    const response = await apiClient.post('/auth/login', credentials);
+    return response.data;
+  } catch (error) {
+    console.error('Error logging in:', error);
+    throw error;
+  }
+};
+
 export const getCategories = async () => {
-  // In a real app, this would fetch from '/api/categories'
-  return Promise.resolve([
-    { id: 'mobiles', name: 'Mobiles' },
-    { id: 'tvs', name: 'TVs' },
-    { id: 'laptops', name: 'Laptops' },
-    { id: 'fridges', name: 'Fridges' },
-    { id: 'acs', name: 'ACs' },
-    { id: 'appliances', name: 'Appliances' },
-  ]);
+  try {
+    const response = await apiClient.get('/products/categories');
+    return response.data; // Expects an array of category objects
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    throw error; 
+  }
 };
 
 export default apiClient;

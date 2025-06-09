@@ -1,14 +1,16 @@
 import React from 'react';
-import { Box, Flex, Heading, Link as ChakraLink, IconButton, Input, InputGroup, InputLeftElement, Stack, useDisclosure, Collapse, Icon, Text, Container } from '@chakra-ui/react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Box, Flex, Heading, Link as ChakraLink, IconButton, Input, InputGroup, InputLeftElement, Stack, useDisclosure, Collapse, Icon, Text, Container, Button, Menu, MenuButton, MenuList, MenuItem, MenuDivider } from '@chakra-ui/react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { HamburgerIcon, CloseIcon, SearchIcon } from '@chakra-ui/icons';
-import { FaMobileAlt, FaTv, FaSnowflake, FaWind, FaShoppingCart } from 'react-icons/fa';
+import { FaMobileAlt, FaTv, FaSnowflake, FaWind, FaShoppingCart, FaUserCircle } from 'react-icons/fa';
 import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../contexts/AuthContext';
 
-const NavLink = ({ href, children, icon }) => (
+const NavLink = ({ href, children, icon, onClick }) => (
   <ChakraLink
     as={RouterLink}
     to={href}
+    onClick={onClick} // Ensure onClick is passed to close mobile menu
     px={3}
     py={2}
     rounded={'md'}
@@ -31,15 +33,21 @@ const NavLink = ({ href, children, icon }) => (
 const Navbar = () => {
   const { isOpen, onToggle } = useDisclosure();
   const { cartItems } = useCart();
+  const { isAuthenticated, user, logout, isLoading } = useAuth();
+  const navigate = useNavigate();
   const cartItemCount = cartItems.reduce((count, item) => count + item.quantity, 0);
 
   const navItems = [
-    { label: 'Mobiles', href: '/category/mobiles', icon: FaMobileAlt },
-    { label: 'TVs', href: '/category/tvs', icon: FaTv },
-    { label: 'Fridges', href: '/category/fridges', icon: FaSnowflake },
-    { label: 'ACs', href: '/category/ac', icon: FaWind },
-    // Consider fetching categories dynamically or defining them in a central place if they grow
+    { label: 'Mobiles', href: '/category/Mobiles', icon: FaMobileAlt },
+    { label: 'TVs', href: '/category/TVs', icon: FaTv },
+    { label: 'Fridges', href: '/category/Fridges', icon: FaSnowflake },
+    { label: 'ACs', href: '/category/ACs', icon: FaWind }, 
   ];
+
+  const handleLogout = () => {
+    logout();
+    navigate('/'); // Navigate to home page after logout
+  };
 
   return (
     <Box bg="white" borderBottomWidth="1px" borderColor="brand.borderColor" position="sticky" top={0} zIndex="sticky">
@@ -47,10 +55,10 @@ const Navbar = () => {
         <Flex
           h={{ base: 'auto', md: '70px' }}
           py={{ base: 2, md: 0 }}
-          px={{ base: 0 }} // Container handles horizontal padding
+          px={{ base: 0 }}
           align={'center'}
           justify={'space-between'}
-          flexWrap="wrap" // Allow wrapping for smaller screens if items don't fit
+          flexWrap="wrap"
         >
           <Flex align={'center'}>
             <ChakraLink as={RouterLink} to="/">
@@ -76,8 +84,8 @@ const Navbar = () => {
                 <SearchIcon color="gray.400" aria-hidden="true" />
               </InputLeftElement>
               <Input 
-                type="search" // Use type="search" for semantic correctness
-                placeholder="Search products... (Ctrl+K)" 
+                type="search"
+                placeholder="Search products..."
                 aria-label="Search products"
                 borderRadius="full" 
                 borderColor="brand.borderColor" 
@@ -95,6 +103,8 @@ const Navbar = () => {
               p={2} 
               aria-label={`View shopping cart, ${cartItemCount} item${cartItemCount !== 1 ? 's' : ''}`}
               _hover={{ color: 'brand.primary' }}
+              display="flex" // Ensures icon is centered if p is applied
+              alignItems="center"
             >
               <Icon as={FaShoppingCart} w={6} h={6} color="brand.textDark" _hover={{ color: 'inherit' }} aria-hidden="true" />
               {cartItemCount > 0 && (
@@ -108,15 +118,45 @@ const Navbar = () => {
                   color="white"
                   bg="brand.accent"
                   borderRadius="full"
-                  px={1.5} // Adjusted padding for better fit with single digit
+                  px={1.5}
                   py={0.5}
                   lineHeight="tight"
-                  aria-hidden="true" // Content is already in aria-label of parent link
+                  aria-hidden="true"
                 >
                   {cartItemCount}
                 </Box>
               )}
             </ChakraLink>
+
+            {!isLoading && (
+              isAuthenticated && user ? (
+                <Menu>
+                  <MenuButton 
+                    as={Button} 
+                    rounded={'full'} 
+                    variant={'link'} 
+                    cursor={'pointer'} 
+                    minW={0} 
+                    _hover={{textDecoration: 'none'}}
+                    aria-label="User menu"
+                    title={user.name || user.email} // Tooltip for user name/email
+                  >
+                    <Icon as={FaUserCircle} w={6} h={6} color="brand.textDark" />
+                  </MenuButton>
+                  <MenuList zIndex="popover">
+                    <MenuItem as={RouterLink} to="/profile">My Profile</MenuItem> {/* Add /profile route later */}
+                    <MenuItem as={RouterLink} to="/orders">My Orders</MenuItem> {/* Add /orders route later */}
+                    <MenuDivider />
+                    <MenuItem onClick={handleLogout} color="red.500">Logout</MenuItem>
+                  </MenuList>
+                </Menu>
+              ) : (
+                <Stack direction="row" spacing={2}>
+                  <Button as={RouterLink} to="/login" size="sm" variant="outline" colorScheme="blue">Login</Button>
+                  <Button as={RouterLink} to="/register" size="sm" colorScheme="green">Sign Up</Button>
+                </Stack>
+              )
+            )}
 
             <IconButton
               size={'md'}
@@ -126,6 +166,7 @@ const Navbar = () => {
               display={{ md: 'none' }}
               onClick={onToggle}
               variant="ghost"
+              ml={2}
             />
           </Flex>
         </Flex>
@@ -136,14 +177,41 @@ const Navbar = () => {
           <Container maxW="container.xl">
             <Stack as={'nav'} aria-label="Mobile navigation" spacing={4} p={4} > 
               {navItems.map((navItem) => (
-                <NavLink key={navItem.label} href={navItem.href} icon={navItem.icon}>
+                <NavLink key={navItem.label} href={navItem.href} icon={navItem.icon} onClick={onToggle}>
                   {navItem.label}
                 </NavLink>
               ))}
-              <ChakraLink as={RouterLink} to="/cart" fontWeight="medium" display="flex" alignItems="center" p={2} rounded="md" _hover={{bg: 'gray.100', color: 'brand.primary'}} color="brand.textDark">
+              <ChakraLink as={RouterLink} to="/cart" fontWeight="medium" display="flex" alignItems="center" p={2} rounded="md" _hover={{bg: 'gray.100', color: 'brand.primary'}} color="brand.textDark" onClick={onToggle}>
                   <Icon as={FaShoppingCart} mr={2} aria-hidden="true" /> My Cart
                   {cartItemCount > 0 && <Text as="span" ml={2} bg="brand.accent" color="white" borderRadius="full" px={2} fontSize="sm">{cartItemCount}</Text>}
               </ChakraLink>
+              <MenuDivider />
+              {!isLoading && isAuthenticated && user ? (
+                <>
+                  <NavLink href="/profile" icon={FaUserCircle} onClick={onToggle}>My Profile</NavLink>
+                  {/* Using a Button styled as NavLink for logout to handle onClick logic cleanly */}
+                  <Button 
+                    onClick={() => { handleLogout(); onToggle(); }} 
+                    colorScheme="red" 
+                    variant="ghost" 
+                    justifyContent="flex-start" 
+                    pl={3} 
+                    py={2} 
+                    fontWeight="medium" 
+                    fontFamily="body"
+                    leftIcon={<Icon as={FaUserCircle} />}
+                    width="full"
+                    _hover={{bg: 'gray.100', color: 'brand.primary'}}
+                  >
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <NavLink href="/login" icon={FaUserCircle} onClick={onToggle}>Login</NavLink>
+                  <NavLink href="/register" icon={FaUserCircle} onClick={onToggle}>Sign Up</NavLink>
+                </>
+              )}
             </Stack>
           </Container>
         </Box>

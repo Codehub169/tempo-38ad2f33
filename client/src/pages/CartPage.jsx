@@ -14,7 +14,7 @@ const CartPage = () => {
 
   const handleQuantityChange = (id, currentQuantity, change, stock) => {
     const newQuantity = currentQuantity + change;
-    const itemStock = stock || 0; // Ensure stock is a number
+    const itemStock = stock || 0; 
 
     if (newQuantity >= 1) {
       if (newQuantity > itemStock) {
@@ -24,13 +24,14 @@ const CartPage = () => {
           status: 'warning',
           duration: 3000,
           isClosable: true,
+          position: 'top'
         });
         updateQuantity(id, itemStock);
       } else {
         updateQuantity(id, newQuantity);
       }
     } else if (newQuantity === 0) {
-      removeFromCart(id); // This will show its own toast from CartContext
+      removeFromCart(id); 
     }
   };
 
@@ -42,6 +43,7 @@ const CartPage = () => {
         status: 'info',
         duration: 3000,
         isClosable: true,
+        position: 'top'
     });
   }
 
@@ -86,13 +88,13 @@ const CartPage = () => {
               shadow="sm"
             >
               <HStack spacing={4} mb={{ base: 4, sm: 0}} align="center" width={{ base: 'full', sm: 'auto'}} flex={{sm: 1}}>
-                <Image src={item.imageUrl || 'https://via.placeholder.com/80x80.png?text=Product'} alt={item.name} boxSize="80px" objectFit="cover" borderRadius="md" />
+                <Image src={item.image_url || item.imageUrl || 'https://via.placeholder.com/80x80.png?text=Product'} alt={item.name} boxSize="80px" objectFit="cover" borderRadius="md" />
                 <Box>
                   <ChakraLink as={RouterLink} to={`/product/${item.id}`} _hover={{textDecoration: 'underline', color: 'brand.primary'}}>
                     <Heading as="h4" size="sm" fontWeight="medium" noOfLines={2} color="brand.textDark">{item.name}</Heading>
                   </ChakraLink>
-                  <Text fontSize="sm" color="brand.textLight">{item.conditionGrade || item.condition}</Text>
-                  <Text fontSize="md" fontWeight="bold" color="brand.primary">${item.price.toFixed(2)}</Text>
+                  <Text fontSize="sm" color="brand.textLight">{item.condition || item.conditionGrade}</Text>
+                  <Text fontSize="md" fontWeight="bold" color="brand.primary">₹{item.price.toLocaleString('en-IN')}</Text>
                 </Box>
               </HStack>
               
@@ -102,7 +104,7 @@ const CartPage = () => {
                   <Text px={2} fontWeight="semibold" minW="20px" textAlign="center">{item.quantity}</Text>
                   <IconButton icon={<FaPlus />} size="sm" onClick={() => handleQuantityChange(item.id, item.quantity, 1, itemStock)} isDisabled={item.quantity >= itemStock} aria-label="Increase quantity" variant="outline" />
                 </HStack>
-                <Text fontWeight="bold" minW="80px" textAlign="right" color="brand.textDark">${(item.price * item.quantity).toFixed(2)}</Text>
+                <Text fontWeight="bold" minW="80px" textAlign="right" color="brand.textDark">₹{(item.price * item.quantity).toLocaleString('en-IN')}</Text>
                 <IconButton icon={<FaTrash />} colorScheme="red" variant="ghost" onClick={() => removeFromCart(item.id)} aria-label="Remove item" />
               </HStack>
             </Flex>
@@ -125,16 +127,16 @@ const CartPage = () => {
           <VStack spacing={3} align="stretch" mb={6}>
             <Flex justify="space-between">
               <Text color="brand.textLight">Subtotal ({totalItems} item{totalItems === 1 ? '' : 's'})</Text>
-              <Text fontWeight="medium" color="brand.textDark">${cartTotal.toFixed(2)}</Text>
+              <Text fontWeight="medium" color="brand.textDark">₹{cartTotal.toLocaleString('en-IN')}</Text>
             </Flex>
             <Flex justify="space-between">
               <Text color="brand.textLight">Shipping</Text>
-              <Text fontWeight="medium" color="green.500">FREE</Text> {/* Placeholder */}
+              <Text fontWeight="medium" color="green.500">FREE</Text> 
             </Flex>
             <Divider my={2} borderColor="brand.borderColor"/>
             <Flex justify="space-between" fontWeight="bold" fontSize="xl">
               <Text color="brand.textDark">Total</Text>
-              <Text color="brand.primary">${cartTotal.toFixed(2)}</Text>
+              <Text color="brand.primary">₹{cartTotal.toLocaleString('en-IN')}</Text>
             </Flex>
           </VStack>
           <Button 

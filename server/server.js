@@ -5,7 +5,11 @@ import { fileURLToPath } from 'url';
 
 import productRoutes from './routes/productRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
-import { getAppDb, closeAppDb } from './db/setup.js'; // Import DB management functions
+import authRoutes from './routes/authRoutes.js'; // Added
+import { getAppDb, closeAppDb } from './db/setup.js';
+
+// IMPORTANT: Add JWT_SECRET to your environment variables for production!
+// For development, you can set a default in authController.js and authMiddleware.js, but this is not secure for production.
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,7 +22,6 @@ const PORT = process.env.PORT || 9000;
 const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:3000', 'http://localhost:5173', `http://localhost:${PORT}`];
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1 && process.env.NODE_ENV === 'production') {
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
@@ -31,10 +34,11 @@ const corsOptions = {
   credentials: true
 };
 app.use(cors(corsOptions)); 
-app.use(express.json({ limit: '1mb' })); // Limit payload size for security
+app.use(express.json({ limit: '1mb' }));
 app.disable('x-powered-by');
 
 // API Routes
+app.use('/api/auth', authRoutes); // Added
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 
@@ -50,12 +54,10 @@ app.get('*', (req, res, next) => {
   res.sendFile(indexPath, (err) => {
     if (err) {
       if (err.code === 'ENOENT') {
-        // err.status = 404; // This is fine, but Express default for ENOENT from sendFile is usually 404
-        // More descriptive message for client build issue
         console.error(`Entry point ${indexPath} not found. Ensure the client application is built and clientDistPath is correct.`);
         res.status(404).send(`Frontend entry point not found. Client application might not be built. Please check server logs.`);
       } else {
-        next(err); // Pass other errors to the global error handler
+        next(err); 
       }
     }
   });
@@ -76,7 +78,6 @@ app.use((err, req, res, next) => {
   }
 });
 
-// Graceful shutdown logic
 const gracefulShutdown = async (signal) => {
   console.log(`${signal} signal received: closing HTTP server and database connection.`);
   let exitCode = 0;
@@ -108,10 +109,8 @@ const gracefulShutdown = async (signal) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Uncaught Exception Handler
 process.on('uncaughtException', (error, origin) => {
   console.error(`UNCAUGHT EXCEPTION! Origin: ${origin}`, error);
-  // Perform minimal cleanup and exit immediately. Avoid complex async operations.
   if (serverInstance && serverInstance.listening) {
     serverInstance.close(() => {
       closeAppDb().finally(() => process.exit(1));
@@ -119,18 +118,14 @@ process.on('uncaughtException', (error, origin) => {
   } else {
     closeAppDb().finally(() => process.exit(1));
   }
-  // Set a timeout to force exit if graceful shutdown hangs
   setTimeout(() => {
     console.error('Graceful shutdown timed out during uncaught exception. Forcing exit.');
     process.exit(1);
   }, 5000).unref();
 });
 
-// Unhandled Rejection Handler
 process.on('unhandledRejection', (reason, promise) => {
   console.error('UNHANDLED PROMISE REJECTION! Reason:', reason);
-  // Treat unhandled rejections as uncaught exceptions
-  // Throwing here will allow 'uncaughtException' handler to manage shutdown.
   if (reason instanceof Error) {
     throw reason;
   } else {
@@ -138,10 +133,9 @@ process.on('unhandledRejection', (reason, promise) => {
   }
 });
 
-// Start server function
 async function startServer() {
   try {
-    await getAppDb(); // Pre-warm/initialize the database connection
+    await getAppDb();
     console.log('Database connection successfully pre-warmed for application.');
 
     serverInstance = app.listen(PORT, () => {

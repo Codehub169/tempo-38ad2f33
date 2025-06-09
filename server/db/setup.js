@@ -95,6 +95,8 @@ async function initializeDatabaseSchema() {
         total_amount REAL NOT NULL,
         status TEXT DEFAULT 'Pending' CHECK(status IN ('Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled')),
         order_date DATETIME DEFAULT CURRENT_TIMESTAMP
+        -- user_id INTEGER, -- Optional: Link orders to registered users
+        -- FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
       );
     `);
     console.log('Orders table created or already exists (db:init).');
@@ -123,12 +125,12 @@ async function initializeDatabaseSchema() {
     `);
     console.log('Users table created or already exists (db:init).');
 
-    const categories = [
+    const categoriesData = [
       { name: 'Mobiles' }, { name: 'TVs' }, { name: 'Laptops' }, 
       { name: 'Fridges' }, { name: 'ACs' }, { name: 'Appliances' }
     ];
     const insertCategory = await db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)');
-    for (const category of categories) {
+    for (const category of categoriesData) {
       await insertCategory.run(category.name);
     }
     await insertCategory.finalize();
@@ -138,7 +140,7 @@ async function initializeDatabaseSchema() {
     {
       name: 'Refurbished iPhone 13 Pro',
       description: 'Experience the power of Pro. A15 Bionic chip, Pro camera system, and Super Retina XDR display with ProMotion.',
-      price: 799.99,
+      price: 63999,
       condition: 'Excellent',
       stock_quantity: 15,
       category_name: 'Mobiles',
@@ -153,7 +155,7 @@ async function initializeDatabaseSchema() {
     {
       name: 'Refurbished Samsung Galaxy S22 Ultra',
       description: 'The epic standard for smartphones with a built-in S Pen, Nightography camera, and a battery that goes for days.',
-      price: 749.00,
+      price: 59900,
       condition: 'Excellent',
       stock_quantity: 10,
       category_name: 'Mobiles',
@@ -168,7 +170,7 @@ async function initializeDatabaseSchema() {
     {
       name: 'Refurbished Dell XPS 15 Laptop',
       description: 'Stunning 15.6-inch display, powerful Intel Core i7 processor, and sleek design for ultimate productivity and creativity.',
-      price: 1199.00,
+      price: 95900,
       condition: 'Good',
       stock_quantity: 8,
       category_name: 'Laptops',
@@ -183,7 +185,7 @@ async function initializeDatabaseSchema() {
     {
       name: 'Refurbished LG OLED C1 55" TV',
       description: 'Experience perfect black and infinite contrast with LG OLED technology. Smart TV capabilities with webOS.',
-      price: 950.00,
+      price: 76000,
       condition: 'Excellent',
       stock_quantity: 5,
       category_name: 'TVs',
@@ -198,7 +200,7 @@ async function initializeDatabaseSchema() {
      {
       name: 'Refurbished Whirlpool Double Door Fridge',
       description: 'Spacious and energy-efficient double door refrigerator, perfect for families. Features adaptive defrost and multiple cooling zones.',
-      price: 550.00,
+      price: 44000,
       condition: 'Good',
       stock_quantity: 12,
       category_name: 'Fridges',
@@ -213,7 +215,7 @@ async function initializeDatabaseSchema() {
     {
       name: 'Refurbished Blue Star 1.5 Ton AC',
       description: 'High-performance split AC with inverter technology for energy savings. Cools efficiently even in extreme temperatures.',
-      price: 320.00,
+      price: 25600,
       condition: 'Excellent',
       stock_quantity: 7,
       category_name: 'ACs',
