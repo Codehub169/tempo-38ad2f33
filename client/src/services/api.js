@@ -25,12 +25,8 @@ apiClient.interceptors.response.use(
   (error) => {
     console.error('API Error:', error.response || error.message || error);
     if (error.response && error.response.status === 401) {
-      // Handle unauthorized errors, e.g., redirect to login or clear token
-      // This is often handled more granularly by AuthContext or specific components
-      // localStorage.removeItem('authToken');
-      // localStorage.removeItem('authUser');
-      // window.location.href = '/login'; // Or use react-router navigate if available here
       console.warn('API returned 401 Unauthorized. Token might be invalid or expired.');
+      // Further handling like redirecting to login can be done in AuthContext or components
     }
     return Promise.reject(error);
   }
@@ -39,18 +35,21 @@ apiClient.interceptors.response.use(
 // Product endpoints
 export const getProducts = async (filters = {}) => {
   try {
-    const { category, condition, price_min, price_max, search, limit, page } = filters;
+    // Destructure expected filter keys, backend uses minPrice, maxPrice
+    const { category, condition, minPrice, maxPrice, search, limit, page, sortBy, sortOrder } = filters;
     const params = new URLSearchParams();
     if (category && String(category).toLowerCase() !== 'all') params.append('category', category);
-    if (condition) params.append('condition', condition);
-    if (price_min !== undefined) params.append('price_min', price_min);
-    if (price_max !== undefined) params.append('price_max', price_max);
+    if (condition && String(condition).toLowerCase() !== 'all') params.append('condition', condition);
+    if (minPrice !== undefined) params.append('minPrice', minPrice);
+    if (maxPrice !== undefined) params.append('maxPrice', maxPrice);
     if (search) params.append('search', search);
     if (limit) params.append('limit', limit);
     if (page) params.append('page', page);
+    if (sortBy) params.append('sortBy', sortBy);
+    if (sortOrder) params.append('sortOrder', sortOrder);
 
     const response = await apiClient.get(`/products?${params.toString()}`);
-    return response.data; // Assuming backend returns { data: [], pagination: {} }
+    return response.data; 
   } catch (error) {
     console.error('Error fetching products:', error);
     throw error;
@@ -63,6 +62,17 @@ export const getProductById = async (id) => {
     return response.data;
   } catch (error) {
     console.error(`Error fetching product with id ${id}:`, error);
+    throw error;
+  }
+};
+
+export const createProduct = async (productData) => {
+  try {
+    const response = await apiClient.post('/products', productData);
+    return response.data;
+  } catch (error) {
+    console.error('Error creating product:', error);
+    // Rethrow to be handled by the calling component (e.g., display toast)
     throw error;
   }
 };
@@ -112,7 +122,7 @@ export const loginUser = async (credentials) => {
 export const getCategories = async () => {
   try {
     const response = await apiClient.get('/products/categories');
-    return response.data; // Expects an array of category objects
+    return response.data; 
   } catch (error) {
     console.error('Error fetching categories:', error);
     throw error; 

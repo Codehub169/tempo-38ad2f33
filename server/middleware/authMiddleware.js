@@ -23,15 +23,6 @@ export const protect = async (req, res, next) => {
         role: decoded.role 
       };
 
-      // Optional: Fetch full user from DB to ensure they still exist/are active.
-      // This adds a DB query per protected request but ensures user data is fresh and valid.
-      // const db = await getAppDb();
-      // const dbUser = await db.get('SELECT id, email, name, role FROM users WHERE id = ?', decoded.id);
-      // if (!dbUser) {
-      //   return res.status(401).json({ message: 'Not authorized, user not found in database' });
-      // }
-      // req.user = dbUser; // Overwrite with potentially more complete/fresh user data
-
       next();
     } catch (error) {
       console.error('Token verification failed:', error.name, error.message);
@@ -47,4 +38,20 @@ export const protect = async (req, res, next) => {
     // No token found in headers
     return res.status(401).json({ message: 'Not authorized, no token provided' });
   }
+};
+
+export const authorize = (roles = []) => {
+  if (typeof roles === 'string') {
+    roles = [roles];
+  }
+  return (req, res, next) => {
+    if (!req.user) { // Should be set by 'protect' middleware
+      return res.status(401).json({ message: 'Not authorized, user information missing in request' });
+    }
+    if (roles.length && !roles.includes(req.user.role)) {
+      // User's role is not authorized
+      return res.status(403).json({ message: 'Forbidden: You do not have the required role to perform this action' });
+    }
+    next(); // Role is authorized
+  };
 };

@@ -3,21 +3,24 @@ import {
   getAllProducts,
   getProductById,
   getCategories,
-  getProductsByCategory
+  getProductsByCategory,
+  createProduct
 } from '../controllers/productController.js';
+import { protect, authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// GET /api/products - Get all products (with optional filters: category, condition, priceMin, priceMax, search, sortBy, sortOrder, page, limit)
+// GET /api/products - Get all products (with optional filters)
 router.get('/', getAllProducts);
+
+// POST /api/products - Create a new product (Protected, Seller only)
+router.post('/', protect, authorize(['seller']), createProduct);
 
 // GET /api/products/categories - Get all product categories
 router.get('/categories', getCategories);
 
 // GET /api/products/category/:categoryName - Get products by category name
 router.get('/category/:categoryName', getProductsByCategory); 
-// Note: It might be better to use category ID if names can have special characters or change.
-// For simplicity with current frontend expectations, using name.
 
 // GET /api/products/:id - Get a single product by ID
 router.get('/:id', getProductById);
