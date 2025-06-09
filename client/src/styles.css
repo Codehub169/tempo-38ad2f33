@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --primary-color: #007BFF; /* Bright Blue */
+    --secondary-color: #F8F9FA; /* Light Gray */
+    --accent-color: #28A745; /* Success Green */
+    --text-dark: #212529;
+    --text-light: #6C757D;
+    --border-color: #DEE2E6;
+    --font-primary: 'Inter', sans-serif;
+    --font-secondary: 'Poppins', sans-serif;
+}
+
+body {
+    font-family: var(--font-primary);
+    color: var(--text-dark);
+    background-color: #FFFFFF; /* Default page background */
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+#root {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    flex-grow: 1;
+}
+
+/* Additional global styles or utilities can be added here */
