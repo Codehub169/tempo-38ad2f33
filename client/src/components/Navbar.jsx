@@ -1,8 +1,8 @@
 import React from 'react';
-import { Box, Flex, Heading, Link as ChakraLink, IconButton, Input, InputGroup, InputLeftElement, Stack, useDisclosure, Collapse, Icon, Text, Kbd } from '@chakra-ui/react';
+import { Box, Flex, Heading, Link as ChakraLink, IconButton, Input, InputGroup, InputLeftElement, Stack, useDisclosure, Collapse, Icon, Text } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
-import { HamburgerIcon, CloseIcon, SearchIcon, ShoppingCartIcon } from '@chakra-ui/icons'; // Using Chakra built-in icons for simplicity
-import { FaMobileAlt, FaTv, FaSnowflake, FaWind } from 'react-icons/fa'; // For category icons
+import { HamburgerIcon, CloseIcon, SearchIcon } from '@chakra-ui/icons';
+import { FaMobileAlt, FaTv, FaSnowflake, FaWind, FaShoppingCart } from 'react-icons/fa';
 import { useCart } from '../contexts/CartContext';
 
 const NavLink = ({ href, children, icon }) => (
@@ -42,7 +42,7 @@ const Navbar = () => {
   return (
     <Box bg="white" borderBottomWidth="1px" borderColor="brand.border" position="sticky" top={0} zIndex="sticky">
       <Flex
-        className="container"
+        className="container" // Assuming .container provides max-width from global styles
         mx="auto"
         h={{ base: 'auto', md: '70px' }}
         py={{ base: 2, md: 0 }}
@@ -74,10 +74,27 @@ const Navbar = () => {
             <InputLeftElement pointerEvents="none">
               <SearchIcon color="gray.400" />
             </InputLeftElement>
-            <Input type="text" placeholder="Search products... (Ctrl+K)" borderRadius="full" borderColor="brand.border" _focus={{ borderColor: 'brand.primary', boxShadow: `0 0 0 1px var(--colors-brand-primary)` }} />
+            <Input 
+              type="text" 
+              placeholder="Search products... (Ctrl+K)" 
+              borderRadius="full" 
+              borderColor="brand.border" 
+              _focus={{ 
+                borderColor: 'brand.primary', 
+                ring: 1, 
+                ringColor: 'brand.primary' 
+              }} 
+            />
           </InputGroup>
-          <ChakraLink as={RouterLink} to="/cart" position="relative" mr={4} p={2}>
-            <ShoppingCartIcon w={6} h={6} color="brand.textDark" _hover={{ color: 'brand.primary' }}/>
+          <ChakraLink 
+            as={RouterLink} 
+            to="/cart" 
+            position="relative" 
+            mr={4} 
+            p={2} 
+            aria-label="View shopping cart"
+          >
+            <Icon as={FaShoppingCart} w={6} h={6} color="brand.textDark" _hover={{ color: 'brand.primary' }}/>
             {cartItemCount > 0 && (
               <Box
                 as="span"
@@ -101,7 +118,7 @@ const Navbar = () => {
           <IconButton
             size={'md'}
             icon={isOpen ? <CloseIcon /> : <HamburgerIcon />}
-            aria-label={'Open Menu'}
+            aria-label="Open Menu"
             display={{ md: 'none' }}
             onClick={onToggle}
             variant="ghost"
@@ -118,7 +135,7 @@ const Navbar = () => {
               </NavLink>
             ))}
              <ChakraLink as={RouterLink} to="/cart" fontWeight="medium" display="flex" alignItems="center" p={2} rounded="md" _hover={{bg: 'gray.100'}}>
-                <Icon as={ShoppingCartIcon} mr={2} /> My Cart
+                <Icon as={FaShoppingCart} mr={2} /> My Cart
                 {cartItemCount > 0 && <Text ml={2} bg="brand.accent" color="white" borderRadius="full" px={2} fontSize="sm">{cartItemCount}</Text>}
             </ChakraLink>
           </Stack>
